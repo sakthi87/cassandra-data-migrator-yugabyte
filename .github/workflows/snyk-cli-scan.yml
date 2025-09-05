@@ -1,0 +1,32 @@
+# GitHub action CI
+# trigger by:
+#  any push on any protected branch: main, v6.8, releases/**
+#  any PR crteated against any protected branch: main, v6.8, releases/**
+
+name: 🔬 Snyk CLI scan
+
+on: 
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: '${{ github.workflow }} @ ${{ github.event.pull_request.head.label || github.head_ref || github.ref }}'
+  #group: ${{ github.workflow }}-${{ github.ref }}-${{ github.job || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  SNYK_SEVERITY_THRESHOLD_LEVEL: critical
+
+jobs:
+  # this is a workaround for the issue that github actions does not support status check on workflow level 
+  skip-means-success:
+    if: ${{ failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: an always fail step
+        run: |
+          echo "if it reaches here, it means that some previous job(s) failed!"
+          exit 123
