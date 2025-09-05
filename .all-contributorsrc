@@ -1,0 +1,175 @@
+{
+  "projectOwner": "datastax",
+  "projectName": "cassandra-data-migrator",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "files": [
+    "CONTRIBUTING.md"
+  ],
+  "imageSize": 50,
+  "commit": false,
+  "commitConvention": "angular",
+  "contributorsPerLine": 6,
+  "contributorsSortAlphabetically": false,
+  "linkToUsage": false,
+  "skipCi": true,
+  "contributors": [
+    {
+      "login": "pravinbhat",
+      "name": "Pravin Bhat",
+      "avatar_url": "https://avatars.githubusercontent.com/u/2746469?v=4",
+      "profile": "https://github.com/pravinbhat",
+      "contributions": [
+        "code",
+        "content",
+        "doc",
+        "design",
+        "maintenance",
+        "test"
+      ]
+    },
+    {
+      "login": "faizalrub-datastax",
+      "name": "faizalrub-datastax",
+      "avatar_url": "https://avatars.githubusercontent.com/u/93143687?v=4",
+      "profile": "https://github.com/faizalrub-datastax",
+      "contributions": [
+        "code",
+        "content",
+        "review"
+      ]
+    },
+    {
+      "login": "msmygit",
+      "name": "Madhavan",
+      "avatar_url": "https://avatars.githubusercontent.com/u/19366623?v=4",
+      "profile": "https://github.com/msmygit",
+      "contributions": [
+        "code",
+        "content",
+        "doc",
+        "design",
+        "maintenance",
+        "test",
+        "example",
+        "ideas",
+        "promotion",
+        "review"
+      ]
+    },
+    {
+      "login": "Ankitp1342",
+      "name": "Ankitp1342",
+      "avatar_url": "https://avatars.githubusercontent.com/u/19273939?v=4",
+      "profile": "https://github.com/Ankitp1342",
+      "contributions": [
+        "code",
+        "content",
+        "doc",
+        "design",
+        "maintenance",
+        "test"
+      ]
+    },
+    {
+      "login": "abinaya21",
+      "name": "Abinaya",
+      "avatar_url": "https://avatars.githubusercontent.com/u/17826577?v=4",
+      "profile": "https://github.com/abinaya21",
+      "contributions": [
+        "code",
+        "userTesting"
+      ]
+    },
+    {
+      "login": "anoop-datastax",
+      "name": "anoop tiwari",
+      "avatar_url": "https://avatars.githubusercontent.com/u/55256709?v=4",
+      "profile": "https://github.com/anoop-datastax",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "weideng1",
+      "name": "weideng1",
+      "avatar_url": "https://avatars.githubusercontent.com/u/5520525?v=4",
+      "profile": "https://github.com/weideng1",
+      "contributions": [
+        "code",
+        "tool",
+        "test",
+        "tutorial"
+      ]
+    },
+    {
+      "login": "ssdatastax",
+      "name": "Steven Smith",
+      "avatar_url": "https://avatars.githubusercontent.com/u/32074414?v=4",
+      "profile": "https://github.com/ssdatastax",
+      "contributions": [
+        "doc"
+      ]
+    },
+    {
+      "login": "vaishakhbn",
+      "name": "Vaishakh Baragur Narasimhareddy",
+      "avatar_url": "https://avatars.githubusercontent.com/u/2619002?v=4",
+      "profile": "https://github.com/vaishakhbn",
+      "contributions": [
+        "code",
+        "test"
+      ]
+    },
+    {
+      "login": "mieslep",
+      "name": "Phil Miesle",
+      "avatar_url": "https://avatars.githubusercontent.com/u/5420540?v=4",
+      "profile": "https://github.com/mieslep",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "mfmaher2",
+      "name": "mfmaher2",
+      "avatar_url": "https://avatars.githubusercontent.com/u/64795956?v=4",
+      "profile": "https://github.com/mfmaher2",
+      "contributions": [
+        "review"
+      ]
+    },
+    {
+      "login": "Jeremya",
+      "name": "Jeremy",
+      "avatar_url": "https://avatars.githubusercontent.com/u/576519?v=4",
+      "profile": "https://github.com/Jeremya",
+      "contributions": [
+        "code"
+      ]
+    },
+    {
+      "login": "arvy",
+      "name": "Arvydas Jonusonis",
+      "avatar_url": "https://avatars.githubusercontent.com/u/4861274?v=4",
+      "profile": "https://github.com/arvy",
+      "contributions": [
+        "userTesting",
+        "doc"
+      ]
+    },
+    {
+      "login": "Skunnyk",
+      "name": "Skunnyk",
+      "avatar_url": "https://avatars.githubusercontent.com/u/3627062?v=4",
+      "profile": "https://blog.alteroot.org",
+      "contributions": [
+        "bug",
+        "test",
+        "question"
+      ]
+    }
+  ],
+  "commitType": "docs"
+}

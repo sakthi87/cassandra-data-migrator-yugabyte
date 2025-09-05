@@ -1,0 +1,54 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Build artifacts
+*.jar
+*.war
+*.ear
+*.class
+
+# Keep the built JAR for reference
+!target/cassandra-data-migrator-5.5.2-SNAPSHOT.jar
+
+# Configuration files with sensitive data
+*-local.properties
+*-prod.properties
+*-staging.properties
+
+# Test results
+test-output/
+test-results/
