@@ -110,8 +110,7 @@ public class YugabyteUpsertStatement {
             throw new RuntimeException("Origin row is null");
         }
 
-        try (Connection connection = session.getConnection();
-                PreparedStatement statement = connection.prepareStatement(upsertSQL)) {
+        try (PreparedStatement statement = session.getConnection().prepareStatement(upsertSQL)) {
 
             // Bind values from origin row to YugabyteDB statement
             for (int i = 0; i < columnNames.size(); i++) {
