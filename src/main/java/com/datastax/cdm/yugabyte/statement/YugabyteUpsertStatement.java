@@ -51,7 +51,6 @@ public class YugabyteUpsertStatement {
         this.bindClasses = yugabyteTable.getBindClasses();
 
         this.upsertSQL = buildUpsertStatement();
-        logger.info("YugabyteDB Upsert SQL: {}", upsertSQL);
     }
 
     private String buildUpsertStatement() {
@@ -125,15 +124,10 @@ public class YugabyteUpsertStatement {
 
                 // Set parameter
                 statement.setObject(i + 1, convertedValue);
-
-                if (logger.isDebugEnabled()) {
-                    logger.debug("Binding column {}: {} -> {}", columnName, value, convertedValue);
-                }
             }
 
             // Execute the statement
             int rowsAffected = statement.executeUpdate();
-            logger.debug("Upserted {} rows", rowsAffected);
 
         } catch (SQLException e) {
             logger.error("Error executing YugabyteDB upsert for record: {}", record, e);
