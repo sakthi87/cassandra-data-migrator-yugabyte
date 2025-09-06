@@ -200,7 +200,10 @@ public class DataTypeMapper {
 
             // Handle timestamp conversion
             if (cassandraType != null && cassandraType.toLowerCase().equals("timestamp")) {
-                if (cassandraValue instanceof java.util.Date) {
+                if (cassandraValue instanceof java.time.Instant) {
+                    return ((java.time.Instant) cassandraValue).atZone(java.time.ZoneId.systemDefault())
+                            .toLocalDateTime();
+                } else if (cassandraValue instanceof java.util.Date) {
                     return ((java.util.Date) cassandraValue).toInstant().atZone(java.time.ZoneId.systemDefault())
                             .toLocalDateTime();
                 } else if (cassandraValue instanceof Long) {
@@ -214,6 +217,11 @@ public class DataTypeMapper {
                 if (cassandraValue instanceof BigInteger) {
                     return ((BigInteger) cassandraValue).longValue();
                 }
+            }
+
+            // Handle Instant to LocalDateTime conversion (common case)
+            if (cassandraValue instanceof java.time.Instant && targetJavaClass == LocalDateTime.class) {
+                return ((java.time.Instant) cassandraValue).atZone(java.time.ZoneId.systemDefault()).toLocalDateTime();
             }
 
             // Direct conversion if types match
