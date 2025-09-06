@@ -80,6 +80,19 @@ public class YugabyteSession {
             String username = propertyHelper.getString(KnownProperties.TARGET_USERNAME);
             String password = propertyHelper.getString(KnownProperties.TARGET_PASSWORD);
 
+            // Debug logging to help identify the issue
+            logger.info("YugabyteDB Connection Parameters:");
+            logger.info("  Host: {}", host);
+            logger.info("  Port: {}", port);
+            logger.info("  Database: {}", database);
+            logger.info("  Username: {}", username);
+
+            // Validate that port is not null or empty
+            if (port == null || port.trim().isEmpty()) {
+                throw new RuntimeException(
+                        "YugabyteDB port is null or empty. Check your properties file for 'spark.cdm.connect.target.yugabyte.port'");
+            }
+
             String url = String.format("jdbc:postgresql://%s:%s/%s", host, port, database);
 
             Properties props = new Properties();
