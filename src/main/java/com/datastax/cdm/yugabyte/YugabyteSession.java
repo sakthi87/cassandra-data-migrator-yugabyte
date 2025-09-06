@@ -74,8 +74,18 @@ public class YugabyteSession {
 
     private Connection initConnection(IPropertyHelper propertyHelper) {
         try {
+            // Debug: Check property keys
+            logger.info("Checking YugabyteDB properties:");
+            logger.info("  TARGET_HOST property key: {}", KnownProperties.TARGET_HOST);
+            logger.info("  TARGET_PORT property key: {}", KnownProperties.TARGET_PORT);
+            logger.info("  TARGET_DATABASE property key: {}", KnownProperties.TARGET_DATABASE);
+            logger.info("  TARGET_USERNAME property key: {}", KnownProperties.TARGET_USERNAME);
+            logger.info("  TARGET_PASSWORD property key: {}", KnownProperties.TARGET_PASSWORD);
+
             String host = propertyHelper.getString(KnownProperties.TARGET_HOST);
-            String port = propertyHelper.getString(KnownProperties.TARGET_PORT);
+            // Port is defined as NUMBER type, so we need to get it as a number and convert to string
+            Number portNumber = propertyHelper.getNumber(KnownProperties.TARGET_PORT);
+            String port = (portNumber != null) ? portNumber.toString() : null;
             String database = propertyHelper.getString(KnownProperties.TARGET_DATABASE);
             String username = propertyHelper.getString(KnownProperties.TARGET_USERNAME);
             String password = propertyHelper.getString(KnownProperties.TARGET_PASSWORD);
