@@ -206,3 +206,28 @@ For issues or questions:
 3. Test connectivity to both Cassandra and YugabyteDB
 4. Review data type mappings for your specific schema
 
+# 1. First run - Full migration with tracking
+spark-submit \
+  --properties-file yugabyte-migrate.properties \
+  --conf spark.cdm.schema.origin.keyspaceTable="your_keyspace.customer" \
+  --conf spark.cdm.trackRun=true \
+  --class com.datastax.cdm.job.YugabyteMigrate \
+  cassandra-data-migrator-5.5.2-SNAPSHOT.jar
+
+# 2. If failures occur - Resume from previous run
+spark-submit \
+  --properties-file yugabyte-migrate.properties \
+  --conf spark.cdm.schema.origin.keyspaceTable="your_keyspace.customer" \
+  --conf spark.cdm.trackRun=true \
+  --conf spark.cdm.prevRunId=<PREVIOUS_RUN_ID> \
+  --class com.datastax.cdm.job.YugabyteMigrate \
+  cassandra-data-migrator-5.5.2-SNAPSHOT.jar
+
+# 3. Custom ranges - For specific partitions
+spark-submit \
+  --properties-file yugabyte-migrate.properties \
+  --conf spark.cdm.schema.origin.keyspaceTable="your_keyspace.customer" \
+  --conf spark.cdm.filter.cassandra.partition.min="<CUSTOM_MIN>" \
+  --conf spark.cdm.filter.cassandra.partition.max="<CUSTOM_MAX>" \
+  --class com.datastax.cdm.job.YugabyteMigrate \
+  cassandra-data-migrator-5.5.2-SNAPSHOT.jar
