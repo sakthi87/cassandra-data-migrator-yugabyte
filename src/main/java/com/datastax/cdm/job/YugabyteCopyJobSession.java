@@ -64,6 +64,10 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
         // This is needed because PKFactory expects two CqlTable objects
         CqlTable targetCqlTable = createTargetCqlTable(cqlTableOrigin);
 
+        // Set up the relationship between origin and target tables (this sets up correspondingIndexes)
+        cqlTableOrigin.setOtherCqlTable(targetCqlTable);
+        targetCqlTable.setOtherCqlTable(cqlTableOrigin);
+
         pkFactory = new PKFactory(propertyHelper, cqlTableOrigin, targetCqlTable);
         this.originSession.setPKFactory(pkFactory);
 
