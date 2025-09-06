@@ -15,6 +15,7 @@
  */
 package com.datastax.cdm.job;
 
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -41,7 +42,7 @@ import com.datastax.oss.driver.api.core.cql.BoundStatement;
 import com.datastax.oss.driver.api.core.cql.ResultSet;
 import com.datastax.oss.driver.api.core.cql.Row;
 
-public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> {
+public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> implements Serializable {
 
     private final PKFactory pkFactory;
     private final boolean isCounterTable;

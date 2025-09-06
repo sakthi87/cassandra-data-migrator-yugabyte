@@ -15,10 +15,12 @@
  */
 package com.datastax.cdm.job;
 
+import java.io.Serializable;
+
 import com.datastax.cdm.properties.PropertyHelper;
 import com.datastax.oss.driver.api.core.CqlSession;
 
-public class YugabyteCopyJobSessionFactory implements IJobSessionFactory<PartitionRange> {
+public class YugabyteCopyJobSessionFactory implements IJobSessionFactory<PartitionRange>, Serializable {
 
     @Override
     public YugabyteCopyJobSession getInstance(CqlSession originSession, CqlSession targetSession,
