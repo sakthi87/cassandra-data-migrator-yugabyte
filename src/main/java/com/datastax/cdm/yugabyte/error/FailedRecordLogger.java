@@ -37,6 +37,10 @@ import com.datastax.oss.driver.api.core.cql.Row;
 public class FailedRecordLogger {
     private static final Logger logger = LoggerFactory.getLogger(FailedRecordLogger.class);
 
+    // Shared timestamp across all instances to avoid multiple log files
+    private static final String SHARED_TIMESTAMP = LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+
     private final ReentrantLock lock = new ReentrantLock();
     private final String baseDir;
     private final String timestamp;
@@ -53,7 +57,7 @@ public class FailedRecordLogger {
 
     public FailedRecordLogger(String baseDir) {
         this.baseDir = baseDir != null ? baseDir : "migration_logs";
-        this.timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        this.timestamp = SHARED_TIMESTAMP; // Use shared timestamp to avoid multiple files
         this.startTime = System.currentTimeMillis();
 
         initializeFiles();

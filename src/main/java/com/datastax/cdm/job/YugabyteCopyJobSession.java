@@ -77,9 +77,12 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
         fetchSize = this.originSession.getCqlTable().getFetchSizeInRows();
         batchSize = this.originSession.getCqlTable().getBatchSize();
 
-        // Initialize YugabyteDB session
+        // Initialize YugabyteDB session with connection sharing
         this.yugabyteSession = new YugabyteSession(propertyHelper, false);
         this.yugabyteUpsertStatement = this.yugabyteSession.getYugabyteUpsertStatement();
+
+        // Log connection info for debugging
+        logger.info("YugabyteDB session initialized for thread: {}", Thread.currentThread().getId());
 
         // Initialize failed record logger
         String logDir = propertyHelper.getString("spark.cdm.log.directory");

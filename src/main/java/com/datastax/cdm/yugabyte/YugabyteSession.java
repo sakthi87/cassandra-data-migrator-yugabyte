@@ -19,6 +19,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,8 +111,53 @@ public class YugabyteSession {
             props.setProperty("password", password);
             props.setProperty("ssl", "false"); // Adjust based on your setup
 
-            logger.info("Connecting to YugabyteDB at: {}", url);
-            return DriverManager.getConnection(url, props);
+            // Connection pooling and retry settings to handle "too many clients" errors
+            props.setProperty("maxConnections", "10"); // Limit concurrent connections per session
+            props.setProperty("connectionTimeout", "30000"); // 30 seconds
+            props.setProperty("socketTimeout", "60000"); // 60 seconds
+            props.setProperty("loginTimeout", "30"); // 30 seconds
+            props.setProperty("tcpKeepAlive", "true");
+            props.setProperty("ApplicationName", "CassandraDataMigrator");
+
+            // Connection retry logic
+            int maxRetries = 5;
+            int retryDelay = 2000; // 2 seconds
+            Connection conn = null;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    logger.info("Connecting to YugabyteDB at: {} (attempt {}/{})", url, attempt, maxRetries);
+                    conn = DriverManager.getConnection(url, props);
+                    logger.info("Successfully connected to YugabyteDB on attempt {}", attempt);
+                    break;
+                } catch (SQLException e) {
+                    if (e.getMessage().contains("too many clients already")) {
+                        logger.warn("Connection attempt {} failed due to too many clients. Retrying in {}ms...",
+                                attempt, retryDelay);
+                        if (attempt < maxRetries) {
+                            try {
+                                TimeUnit.MILLISECONDS.sleep(retryDelay);
+                                retryDelay *= 2; // Exponential backoff
+                            } catch (InterruptedException ie) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException("Connection interrupted", ie);
+                            }
+                        } else {
+                            logger.error("Failed to connect after {} attempts due to connection limit", maxRetries);
+                            throw e;
+                        }
+                    } else {
+                        logger.error("Failed to connect to YugabyteDB on attempt {}", attempt, e);
+                        throw e;
+                    }
+                }
+            }
+
+            if (conn == null) {
+                throw new RuntimeException("Failed to establish connection after all retry attempts");
+            }
+
+            return conn;
 
         } catch (SQLException e) {
             logger.error("Failed to connect to YugabyteDB", e);
