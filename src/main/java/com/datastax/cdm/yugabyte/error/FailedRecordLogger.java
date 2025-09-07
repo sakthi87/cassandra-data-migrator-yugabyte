@@ -70,7 +70,7 @@ public class FailedRecordLogger {
             // Initialize failed records file (complete record data)
             String failedRecordsFile = String.format("%s/failed_records_%s.csv", baseDir, timestamp);
             failedRecordsWriter = new PrintWriter(new FileWriter(failedRecordsFile, true));
-            failedRecordsWriter.println("timestamp,primary_key,record_data,error_message");
+            failedRecordsWriter.println("timestamp,primary_key,record_data");
 
             // Initialize failed keys file (keys and reasons)
             String failedKeysFile = String.format("%s/failed_keys_%s.csv", baseDir, timestamp);
@@ -97,7 +97,7 @@ public class FailedRecordLogger {
     }
 
     /**
-     * Log a failed record with complete data for reprocessing
+     * Log a failed record with complete data for reprocessing (clean data only, no error details)
      */
     public void logFailedRecord(Record record, Exception error) {
         lock.lock();
@@ -105,10 +105,8 @@ public class FailedRecordLogger {
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
             String primaryKey = record.getPk() != null ? record.getPk().toString() : "null";
             String recordData = serializeRecord(record);
-            String errorMessage = error.getMessage() != null ? error.getMessage().replace("\n", " ").replace("\r", " ")
-                    : "Unknown error";
-
-            failedRecordsWriter.printf("%s,\"%s\",\"%s\",\"%s\"%n", timestamp, primaryKey, recordData, errorMessage);
+            // Only log timestamp, primary key, and record data - no error message for clean reprocessing
+            failedRecordsWriter.printf("%s,\"%s\",\"%s\"%n", timestamp, primaryKey, recordData);
             failedRecordsWriter.flush();
 
             totalErrors++;
@@ -199,9 +197,10 @@ public class FailedRecordLogger {
                 performanceWriter.println();
                 performanceWriter.println("=== Error Analysis ===");
                 performanceWriter.println("Failed records have been logged to:");
+                performanceWriter.println(
+                        "  - failed_records_" + timestamp + ".csv (clean record data for direct reprocessing)");
                 performanceWriter
-                        .println("  - failed_records_" + timestamp + ".csv (complete record data for reprocessing)");
-                performanceWriter.println("  - failed_keys_" + timestamp + ".csv (keys and failure reasons)");
+                        .println("  - failed_keys_" + timestamp + ".csv (keys and failure reasons for analysis)");
             }
 
             performanceWriter.flush();
