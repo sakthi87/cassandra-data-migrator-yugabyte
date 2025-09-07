@@ -34,6 +34,7 @@ import com.datastax.cdm.feature.TrackRun;
 import com.datastax.cdm.properties.PropertyHelper;
 import com.datastax.cdm.schema.CqlTable;
 import com.datastax.cdm.yugabyte.YugabyteSession;
+import com.datastax.cdm.yugabyte.error.CentralizedPerformanceLogger;
 import com.datastax.cdm.yugabyte.error.FailedRecordLogger;
 import com.datastax.cdm.yugabyte.statement.YugabyteUpsertStatement;
 import com.datastax.oss.driver.api.core.CqlSession;
@@ -90,6 +91,9 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
             logDir = "migration_logs";
         }
         this.failedRecordLogger = new FailedRecordLogger(logDir);
+
+        // Initialize centralized performance logger
+        CentralizedPerformanceLogger.initialize(logDir);
 
         logger.info("CQL -- origin select: {}", this.originSession.getOriginSelectByPartitionRangeStatement().getCQL());
         logger.info("SQL -- yugabyte upsert: {}", this.yugabyteUpsertStatement.getSQL());
@@ -167,6 +171,14 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
                         jobCounter.getCount(JobCounter.CounterType.SKIPPED));
             }
 
+            // Update centralized performance logger with partition success
+            CentralizedPerformanceLogger.updateMetrics(jobCounter.getCount(JobCounter.CounterType.READ),
+                    jobCounter.getCount(JobCounter.CounterType.WRITE),
+                    jobCounter.getCount(JobCounter.CounterType.ERROR),
+                    jobCounter.getCount(JobCounter.CounterType.SKIPPED), 1, // partitions processed
+                    0 // partitions failed
+            );
+
             if (null != trackRunFeature) {
                 trackRunFeature.updateCdmRun(runId, min, TrackRun.RUN_STATUS.PASS, jobCounter.getMetrics());
             }
@@ -180,6 +192,15 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
                     Thread.currentThread().getId(), min, max, e);
             logger.error("Error stats " + jobCounter.getMetrics(true));
             jobCounter.flush();
+
+            // Update centralized performance logger with partition failure
+            CentralizedPerformanceLogger.updateMetrics(jobCounter.getCount(JobCounter.CounterType.READ),
+                    jobCounter.getCount(JobCounter.CounterType.WRITE),
+                    jobCounter.getCount(JobCounter.CounterType.ERROR),
+                    jobCounter.getCount(JobCounter.CounterType.SKIPPED), 0, // partitions processed
+                    1 // partitions failed
+            );
+
             if (null != trackRunFeature) {
                 trackRunFeature.updateCdmRun(runId, min, TrackRun.RUN_STATUS.FAIL, jobCounter.getMetrics());
             }

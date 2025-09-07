@@ -18,6 +18,7 @@ package com.datastax.cdm.job
 import com.datastax.cdm.job.IJobSessionFactory.JobType
 import com.datastax.cdm.properties.KnownProperties
 import com.datastax.cdm.data.PKFactory.Side
+import com.datastax.cdm.yugabyte.error.CentralizedPerformanceLogger
 
 object YugabyteMigrate extends BasePartitionJob {
   jobType = JobType.MIGRATE
@@ -52,7 +53,16 @@ object YugabyteMigrate extends BasePartitionJob {
       })
       
       ma.value.printMetrics(runId, trackRunFeature);
+      
+      // Write final migration summary
+      CentralizedPerformanceLogger.writeFinalSummary();
     }
+  }
+  
+  override def finish(): Unit = {
+    // Close centralized performance logger
+    CentralizedPerformanceLogger.close();
+    super.finish();
   }
 }
 

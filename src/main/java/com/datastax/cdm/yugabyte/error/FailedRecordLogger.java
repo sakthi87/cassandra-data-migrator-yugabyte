@@ -155,16 +155,8 @@ public class FailedRecordLogger {
             this.totalErrors += errors;
             this.totalSkipped += skipped;
 
-            // Write periodic performance updates
-            long currentTime = System.currentTimeMillis();
-            long elapsed = currentTime - startTime;
-            double throughput = totalWrites > 0 ? (totalWrites * 1000.0 / elapsed) : 0.0;
-
-            performanceWriter.printf(
-                    "[%s] Reads: %d, Writes: %d, Errors: %d, Skipped: %d, Throughput: %.2f records/sec%n",
-                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), totalReads, totalWrites,
-                    totalErrors, totalSkipped, throughput);
-            performanceWriter.flush();
+            // Update centralized performance logger
+            CentralizedPerformanceLogger.updateMetrics(reads, writes, errors, skipped, 1, 0);
 
         } catch (Exception e) {
             logger.error("Failed to update performance metrics", e);
