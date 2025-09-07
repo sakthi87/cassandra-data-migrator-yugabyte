@@ -34,6 +34,7 @@ import com.datastax.cdm.feature.TrackRun;
 import com.datastax.cdm.properties.PropertyHelper;
 import com.datastax.cdm.schema.CqlTable;
 import com.datastax.cdm.yugabyte.YugabyteSession;
+import com.datastax.cdm.yugabyte.error.FailedRecordLogger;
 import com.datastax.cdm.yugabyte.statement.YugabyteUpsertStatement;
 import com.datastax.oss.driver.api.core.CqlSession;
 import com.datastax.oss.driver.api.core.cql.AsyncResultSet;
@@ -52,6 +53,7 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
     public Logger logger = LoggerFactory.getLogger(this.getClass().getName());
     private YugabyteUpsertStatement yugabyteUpsertStatement;
     private YugabyteSession yugabyteSession;
+    private FailedRecordLogger failedRecordLogger;
 
     protected YugabyteCopyJobSession(CqlSession originSession, PropertyHelper propHelper) {
         super(originSession, null, propHelper); // No target CqlSession for YugabyteDB
@@ -78,6 +80,13 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
         // Initialize YugabyteDB session
         this.yugabyteSession = new YugabyteSession(propertyHelper, false);
         this.yugabyteUpsertStatement = this.yugabyteSession.getYugabyteUpsertStatement();
+
+        // Initialize failed record logger
+        String logDir = propertyHelper.getString("spark.cdm.log.directory");
+        if (logDir == null || logDir.trim().isEmpty()) {
+            logDir = "migration_logs";
+        }
+        this.failedRecordLogger = new FailedRecordLogger(logDir);
 
         logger.info("CQL -- origin select: {}", this.originSession.getOriginSelectByPartitionRangeStatement().getCQL());
         logger.info("SQL -- yugabyte upsert: {}", this.yugabyteUpsertStatement.getSQL());
@@ -134,12 +143,27 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
                     } catch (SQLException e) {
                         logger.error("Error writing record to YugabyteDB: {}", r, e);
                         jobCounter.increment(JobCounter.CounterType.ERROR);
+
+                        // Log failed record to separate files
+                        if (failedRecordLogger != null) {
+                            failedRecordLogger.logFailedRecord(r, e);
+                            failedRecordLogger.logFailedKey(r, e);
+                        }
                     }
                 }
             }
 
             jobCounter.increment(JobCounter.CounterType.PARTITIONS_PASSED);
             jobCounter.flush();
+
+            // Update performance metrics
+            if (failedRecordLogger != null) {
+                failedRecordLogger.updateMetrics(jobCounter.getCount(JobCounter.CounterType.READ),
+                        jobCounter.getCount(JobCounter.CounterType.WRITE),
+                        jobCounter.getCount(JobCounter.CounterType.ERROR),
+                        jobCounter.getCount(JobCounter.CounterType.SKIPPED));
+            }
+
             if (null != trackRunFeature) {
                 trackRunFeature.updateCdmRun(runId, min, TrackRun.RUN_STATUS.PASS, jobCounter.getMetrics());
             }
@@ -163,6 +187,9 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
 
     @Override
     public void close() {
+        if (failedRecordLogger != null) {
+            failedRecordLogger.close();
+        }
         if (yugabyteSession != null) {
             yugabyteSession.close();
         }
