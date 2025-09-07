@@ -155,8 +155,8 @@ public class FailedRecordLogger {
             this.totalErrors += errors;
             this.totalSkipped += skipped;
 
-            // Update centralized performance logger
-            CentralizedPerformanceLogger.updateMetrics(reads, writes, errors, skipped, 1, 0);
+            // Note: CentralizedPerformanceLogger is updated directly from YugabyteCopyJobSession
+            // to avoid double counting
 
         } catch (Exception e) {
             logger.error("Failed to update performance metrics", e);

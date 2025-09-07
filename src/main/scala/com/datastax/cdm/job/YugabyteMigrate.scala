@@ -54,6 +54,10 @@ object YugabyteMigrate extends BasePartitionJob {
       
       ma.value.printMetrics(runId, trackRunFeature);
       
+      // Add configuration parameters to summary
+      val configParams = buildConfigurationSummary();
+      CentralizedPerformanceLogger.addConfigurationParameters(configParams);
+      
       // Write final migration summary
       CentralizedPerformanceLogger.writeFinalSummary();
     }
@@ -63,6 +67,58 @@ object YugabyteMigrate extends BasePartitionJob {
     // Close centralized performance logger
     CentralizedPerformanceLogger.close();
     super.finish();
+  }
+  
+  /**
+   * Build configuration summary for performance tuning
+   */
+  private def buildConfigurationSummary(): String = {
+    val sb = new StringBuilder();
+    
+    // Spark Configuration
+    sb.append("Spark Configuration:\n");
+    sb.append(s"  Master: ${sContext.getConf.get("spark.master", "local[*]")}\n");
+    sb.append(s"  Driver Memory: ${sContext.getConf.get("spark.driver.memory", "1g")}\n");
+    sb.append(s"  Executor Memory: ${sContext.getConf.get("spark.executor.memory", "1g")}\n");
+    sb.append(s"  Executor Cores: ${sContext.getConf.get("spark.executor.cores", "1")}\n");
+    sb.append(s"  Executor Instances: ${sContext.getConf.get("spark.executor.instances", "1")}\n");
+    sb.append(s"  Parallelism: ${sContext.getConf.get("spark.default.parallelism", "1")}\n");
+    
+    // CDM Configuration
+    sb.append("\nCDM Configuration:\n");
+    sb.append(s"  Origin Rate Limit: ${getPropertyOrDefault("spark.cdm.rate.origin.readsPerSecond", "1000")} reads/sec\n");
+    sb.append(s"  Target Rate Limit: ${getPropertyOrDefault("spark.cdm.rate.target.writesPerSecond", "1000")} writes/sec\n");
+    sb.append(s"  Batch Size: ${getPropertyOrDefault("spark.cdm.batch.size", "100")}\n");
+    sb.append(s"  Fetch Size: ${getPropertyOrDefault("spark.cdm.fetch.size", "1000")}\n");
+    sb.append(s"  Partition Size: ${getPropertyOrDefault("spark.cdm.partition.size", "1000000")}\n");
+    sb.append(s"  Thread Count: ${getPropertyOrDefault("spark.cdm.thread.count", "4")}\n");
+    
+    // Connection Configuration
+    sb.append("\nConnection Configuration:\n");
+    sb.append(s"  Origin Host: ${getPropertyOrDefault(KnownProperties.CONNECT_ORIGIN_HOST, "N/A")}\n");
+    sb.append(s"  Origin Port: ${getPropertyOrDefault(KnownProperties.CONNECT_ORIGIN_PORT, "N/A")}\n");
+    sb.append(s"  Target Host: ${getPropertyOrDefault(KnownProperties.TARGET_HOST, "N/A")}\n");
+    sb.append(s"  Target Port: ${getPropertyOrDefault(KnownProperties.TARGET_PORT, "N/A")}\n");
+    sb.append(s"  Target Database: ${getPropertyOrDefault(KnownProperties.TARGET_DATABASE, "N/A")}\n");
+    
+    // Performance Tuning Recommendations
+    sb.append("\nPerformance Tuning Recommendations:\n");
+    sb.append("  To increase throughput, consider:\n");
+    sb.append("  - Increasing spark.executor.memory and spark.executor.cores\n");
+    sb.append("  - Increasing spark.cdm.rate.target.writesPerSecond\n");
+    sb.append("  - Increasing spark.cdm.batch.size and spark.cdm.fetch.size\n");
+    sb.append("  - Adding more executor instances\n");
+    sb.append("  - Optimizing network settings\n");
+    
+    sb.toString();
+  }
+  
+  /**
+   * Helper method to get property value with default
+   */
+  private def getPropertyOrDefault(propertyName: String, defaultValue: String): String = {
+    val value = propertyHelper.getString(propertyName);
+    if (value != null && !value.trim.isEmpty()) value else defaultValue;
   }
 }
 

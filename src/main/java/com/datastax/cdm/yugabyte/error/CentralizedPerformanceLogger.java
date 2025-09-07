@@ -98,6 +98,28 @@ public class CentralizedPerformanceLogger {
     }
 
     /**
+     * Add configuration parameters to the summary
+     */
+    public static void addConfigurationParameters(String configParams) {
+        if (!initialized || performanceWriter == null) {
+            return;
+        }
+
+        lock.lock();
+        try {
+            performanceWriter.println();
+            performanceWriter.println("=== CONFIGURATION PARAMETERS ===");
+            performanceWriter.println(configParams);
+            performanceWriter.println();
+            performanceWriter.flush();
+        } catch (Exception e) {
+            logger.error("Failed to add configuration parameters", e);
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
      * Update metrics from a Spark task
      */
     public static void updateMetrics(long reads, long writes, long errors, long skipped, long partitionsProcessed,
