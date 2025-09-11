@@ -109,15 +109,24 @@ public class YugabyteSession {
             Properties props = new Properties();
             props.setProperty("user", username);
             props.setProperty("password", password);
-            props.setProperty("ssl", "false"); // Adjust based on your setup
+
+            // SSL and connection settings to handle timeout issues
+            props.setProperty("ssl", "false"); // Disable SSL to avoid handshake timeouts
+            props.setProperty("sslmode", "disable"); // Explicitly disable SSL mode
+            props.setProperty("sslrootcert", ""); // No SSL certificate required
 
             // Connection pooling and retry settings to handle "too many clients" errors
-            props.setProperty("maxConnections", "10"); // Limit concurrent connections per session
-            props.setProperty("connectionTimeout", "30000"); // 30 seconds
-            props.setProperty("socketTimeout", "60000"); // 60 seconds
-            props.setProperty("loginTimeout", "30"); // 30 seconds
+            props.setProperty("maxConnections", "5"); // Reduce concurrent connections per session
+            props.setProperty("connectionTimeout", "60000"); // Increase to 60 seconds
+            props.setProperty("socketTimeout", "120000"); // Increase to 2 minutes
+            props.setProperty("loginTimeout", "60"); // Increase to 60 seconds
             props.setProperty("tcpKeepAlive", "true");
             props.setProperty("ApplicationName", "CassandraDataMigrator");
+
+            // Additional timeout settings
+            props.setProperty("connectTimeout", "60000"); // Connection establishment timeout
+            props.setProperty("readTimeout", "120000"); // Read operation timeout
+            props.setProperty("cancelSignalTimeout", "30000"); // Cancel signal timeout
 
             // Connection retry logic
             int maxRetries = 5;
@@ -131,9 +140,15 @@ public class YugabyteSession {
                     logger.info("Successfully connected to YugabyteDB on attempt {}", attempt);
                     break;
                 } catch (SQLException e) {
-                    if (e.getMessage().contains("too many clients already")) {
-                        logger.warn("Connection attempt {} failed due to too many clients. Retrying in {}ms...",
-                                attempt, retryDelay);
+                    String errorMessage = e.getMessage().toLowerCase();
+                    if (errorMessage.contains("too many clients already") || errorMessage.contains("read timed out")
+                            || errorMessage.contains("connection timed out")
+                            || errorMessage.contains("socket timeout")) {
+
+                        logger.warn("Connection attempt {} failed due to {} (attempt {}/{}). Retrying in {}ms...",
+                                attempt, errorMessage.contains("too many clients") ? "connection limit" : "timeout",
+                                attempt, maxRetries, retryDelay);
+
                         if (attempt < maxRetries) {
                             try {
                                 TimeUnit.MILLISECONDS.sleep(retryDelay);
@@ -143,7 +158,8 @@ public class YugabyteSession {
                                 throw new RuntimeException("Connection interrupted", ie);
                             }
                         } else {
-                            logger.error("Failed to connect after {} attempts due to connection limit", maxRetries);
+                            logger.error("Failed to connect after {} attempts due to {}", maxRetries,
+                                    errorMessage.contains("too many clients") ? "connection limit" : "timeout");
                             throw e;
                         }
                     } else {
