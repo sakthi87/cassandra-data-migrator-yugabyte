@@ -115,12 +115,12 @@ public class YugabyteSession {
             // YugabyteDB Smart Driver specific properties
             props.setProperty("load-balance", "true"); // Enable cluster-aware load balancing
             props.setProperty("topology-keys", ""); // Auto-detect topology (can specify datacenter:region:zone)
-            
+
             // SSL configuration - check if SSL is enabled via properties
             String sslEnabled = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSL_ENABLED);
             String sslMode = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLMODE);
             String sslRootCert = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLROOTCERT);
-            
+
             if (sslEnabled != null && "true".equalsIgnoreCase(sslEnabled)) {
                 // SSL is enabled
                 props.setProperty("ssl", "true");
@@ -132,8 +132,7 @@ public class YugabyteSession {
                 if (sslRootCert != null && !sslRootCert.isEmpty()) {
                     props.setProperty("sslrootcert", sslRootCert);
                 }
-                logger.info("SSL enabled for YugabyteDB connection with sslmode: {}", 
-                    props.getProperty("sslmode"));
+                logger.info("SSL enabled for YugabyteDB connection with sslmode: {}", props.getProperty("sslmode"));
             } else {
                 // SSL disabled (default behavior)
                 props.setProperty("ssl", "false");
