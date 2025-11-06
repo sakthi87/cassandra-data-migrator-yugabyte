@@ -181,12 +181,21 @@
 			<version>${mockito.version}</version>
 			<scope>test</scope>
 		</dependency>
-		<!-- PostgreSQL JDBC driver for YugabyteDB YSQL support -->
+		<!-- YugabyteDB JDBC Smart Driver for YSQL support -->
+		<!-- Smart Driver provides load balancing, topology awareness, and better performance -->
+		<dependency>
+			<groupId>com.yugabyte</groupId>
+			<artifactId>jdbc-yugabytedb</artifactId>
+			<version>42.7.3-yb-4</version>
+		</dependency>
+		<!-- Keep PostgreSQL driver as fallback (optional, can be removed if not needed) -->
+		<!--
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 			<version>42.7.3</version>
 		</dependency>
+		-->
 	</dependencies>
 
 	<scm>

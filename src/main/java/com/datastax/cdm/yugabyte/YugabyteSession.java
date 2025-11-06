@@ -104,16 +104,43 @@ public class YugabyteSession {
                         "YugabyteDB port is null or empty. Check your properties file for 'spark.cdm.connect.target.yugabyte.port'");
             }
 
-            String url = String.format("jdbc:postgresql://%s:%s/%s", host, port, database);
+            // Use YugabyteDB Smart Driver JDBC URL
+            // Smart Driver provides: load balancing, topology awareness, better performance
+            String url = String.format("jdbc:yugabytedb://%s:%s/%s", host, port, database);
 
             Properties props = new Properties();
             props.setProperty("user", username);
             props.setProperty("password", password);
 
-            // SSL and connection settings to handle timeout issues
-            props.setProperty("ssl", "false"); // Disable SSL to avoid handshake timeouts
-            props.setProperty("sslmode", "disable"); // Explicitly disable SSL mode
-            props.setProperty("sslrootcert", ""); // No SSL certificate required
+            // YugabyteDB Smart Driver specific properties
+            props.setProperty("load-balance", "true"); // Enable cluster-aware load balancing
+            props.setProperty("topology-keys", ""); // Auto-detect topology (can specify datacenter:region:zone)
+            
+            // SSL configuration - check if SSL is enabled via properties
+            String sslEnabled = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSL_ENABLED);
+            String sslMode = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLMODE);
+            String sslRootCert = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLROOTCERT);
+            
+            if (sslEnabled != null && "true".equalsIgnoreCase(sslEnabled)) {
+                // SSL is enabled
+                props.setProperty("ssl", "true");
+                if (sslMode != null && !sslMode.isEmpty()) {
+                    props.setProperty("sslmode", sslMode); // verify-full, require, prefer, etc.
+                } else {
+                    props.setProperty("sslmode", "require"); // Default to require if enabled
+                }
+                if (sslRootCert != null && !sslRootCert.isEmpty()) {
+                    props.setProperty("sslrootcert", sslRootCert);
+                }
+                logger.info("SSL enabled for YugabyteDB connection with sslmode: {}", 
+                    props.getProperty("sslmode"));
+            } else {
+                // SSL disabled (default behavior)
+                props.setProperty("ssl", "false");
+                props.setProperty("sslmode", "disable");
+                props.setProperty("sslrootcert", "");
+                logger.info("SSL disabled for YugabyteDB connection");
+            }
 
             // Connection pooling and retry settings to handle "too many clients" errors
             props.setProperty("maxConnections", "5"); // Reduce concurrent connections per session

@@ -55,6 +55,11 @@ public class KnownProperties {
     public static final String TARGET_USERNAME = "spark.cdm.connect.target.yugabyte.username";
     public static final String TARGET_PASSWORD = "spark.cdm.connect.target.yugabyte.password";
     public static final String TARGET_TYPE = "spark.cdm.connect.target.type"; // "cassandra" or "yugabyte"
+    
+    // YugabyteDB YSQL SSL configuration (for Smart Driver)
+    public static final String TARGET_YUGABYTE_SSL_ENABLED = "spark.cdm.connect.target.yugabyte.ssl.enabled";
+    public static final String TARGET_YUGABYTE_SSLMODE = "spark.cdm.connect.target.yugabyte.sslmode";
+    public static final String TARGET_YUGABYTE_SSLROOTCERT = "spark.cdm.connect.target.yugabyte.sslrootcert";
 
     // ==========================================================================
     // Astra DevOps API Parameters
@@ -104,6 +109,13 @@ public class KnownProperties {
         defaults.put(TARGET_PASSWORD, "yugabyte");
         types.put(TARGET_TYPE, PropertyType.STRING);
         defaults.put(TARGET_TYPE, "cassandra");
+        
+        // YugabyteDB YSQL SSL configuration
+        types.put(TARGET_YUGABYTE_SSL_ENABLED, PropertyType.BOOLEAN);
+        defaults.put(TARGET_YUGABYTE_SSL_ENABLED, "false");
+        types.put(TARGET_YUGABYTE_SSLMODE, PropertyType.STRING);
+        defaults.put(TARGET_YUGABYTE_SSLMODE, "disable");
+        types.put(TARGET_YUGABYTE_SSLROOTCERT, PropertyType.STRING);
 
         // Astra DevOps API parameters
         types.put(ORIGIN_ASTRA_DATABASE_ID, PropertyType.STRING);

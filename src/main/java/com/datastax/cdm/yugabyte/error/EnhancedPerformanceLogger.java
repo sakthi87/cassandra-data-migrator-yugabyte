@@ -46,7 +46,7 @@ public class EnhancedPerformanceLogger {
     private static final AtomicLong totalSkipped = new AtomicLong(0);
     private static final AtomicLong totalPartitionsProcessed = new AtomicLong(0);
     private static final AtomicLong totalPartitionsFailed = new AtomicLong(0);
-    
+
     // Detailed batch processing metrics
     private static final AtomicLong totalBatchesProcessed = new AtomicLong(0);
     private static final AtomicLong totalBatchTime = new AtomicLong(0);
@@ -101,8 +101,8 @@ public class EnhancedPerformanceLogger {
      * Update detailed performance metrics including batch processing details
      */
     public static void updateMetrics(long reads, long writes, long errors, long skipped, long partitionsProcessed,
-            long partitionsFailed, long batchesProcessed, long batchTime, long batchSize, 
-            long connectionTime, long dataProcessingTime) {
+            long partitionsFailed, long batchesProcessed, long batchTime, long batchSize, long connectionTime,
+            long dataProcessingTime) {
         if (!initialized) {
             return;
         }
@@ -115,18 +115,18 @@ public class EnhancedPerformanceLogger {
             totalSkipped.addAndGet(skipped);
             totalPartitionsProcessed.addAndGet(partitionsProcessed);
             totalPartitionsFailed.addAndGet(partitionsFailed);
-            
+
             // Update detailed batch metrics
             totalBatchesProcessed.addAndGet(batchesProcessed);
             totalBatchTime.addAndGet(batchTime);
             totalBatchSize.addAndGet(batchSize);
             totalConnectionTime.addAndGet(connectionTime);
             totalDataProcessingTime.addAndGet(dataProcessingTime);
-            
+
             // Calculate overhead time
             long overheadTime = batchTime - connectionTime - dataProcessingTime;
             totalOverheadTime.addAndGet(overheadTime);
-            
+
             // Calculate current batch throughput
             if (batchTime > 0 && batchSize > 0) {
                 long currentBatchThroughput = (batchSize * 1000) / batchTime; // records per second
@@ -139,29 +139,32 @@ public class EnhancedPerformanceLogger {
             long currentTime = System.currentTimeMillis();
             long elapsed = currentTime - migrationStartTime;
             double currentThroughput = totalWrites.get() > 0 ? (totalWrites.get() * 1000.0 / elapsed) : 0.0;
-            double avgBatchSize = totalBatchesProcessed.get() > 0 ? (double) totalBatchSize.get() / totalBatchesProcessed.get() : 0.0;
-            double avgBatchTime = totalBatchesProcessed.get() > 0 ? (double) totalBatchTime.get() / totalBatchesProcessed.get() : 0.0;
-            double avgConnectionTime = totalBatchesProcessed.get() > 0 ? (double) totalConnectionTime.get() / totalBatchesProcessed.get() : 0.0;
-            double avgDataProcessingTime = totalBatchesProcessed.get() > 0 ? (double) totalDataProcessingTime.get() / totalBatchesProcessed.get() : 0.0;
-            double avgOverheadTime = totalBatchesProcessed.get() > 0 ? (double) totalOverheadTime.get() / totalBatchesProcessed.get() : 0.0;
+            double avgBatchSize = totalBatchesProcessed.get() > 0
+                    ? (double) totalBatchSize.get() / totalBatchesProcessed.get() : 0.0;
+            double avgBatchTime = totalBatchesProcessed.get() > 0
+                    ? (double) totalBatchTime.get() / totalBatchesProcessed.get() : 0.0;
+            double avgConnectionTime = totalBatchesProcessed.get() > 0
+                    ? (double) totalConnectionTime.get() / totalBatchesProcessed.get() : 0.0;
+            double avgDataProcessingTime = totalBatchesProcessed.get() > 0
+                    ? (double) totalDataProcessingTime.get() / totalBatchesProcessed.get() : 0.0;
+            double avgOverheadTime = totalBatchesProcessed.get() > 0
+                    ? (double) totalOverheadTime.get() / totalBatchesProcessed.get() : 0.0;
 
             performanceWriter.printf(
-                    "[%s] DETAILED PROGRESS REPORT%n" +
-                    "  Overall: Reads: %d, Writes: %d, Errors: %d, Skipped: %d%n" +
-                    "  Partitions: %d/%d (%.1f%% success rate)%n" +
-                    "  Current Throughput: %.2f records/sec%n" +
-                    "  Batch Processing: %d batches processed%n" +
-                    "  Average Batch Size: %.1f records%n" +
-                    "  Average Batch Time: %.1fms (Connection: %.1fms, Data: %.1fms, Overhead: %.1fms)%n" +
-                    "  Peak Batch Throughput: %d records/sec%n" +
-                    "  Time Breakdown: Connection %.1f%%, Data Processing %.1f%%, Overhead %.1f%%%n" +
-                    "  ==========================================%n",
-                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), 
-                    totalReads.get(), totalWrites.get(), totalErrors.get(), totalSkipped.get(),
-                    totalPartitionsProcessed.get(), totalPartitionsProcessed.get() + totalPartitionsFailed.get(),
-                    totalPartitionsProcessed.get() > 0 ? (100.0 * totalPartitionsProcessed.get() / (totalPartitionsProcessed.get() + totalPartitionsFailed.get())) : 0.0,
-                    currentThroughput, totalBatchesProcessed.get(), avgBatchSize, avgBatchTime,
-                    avgConnectionTime, avgDataProcessingTime, avgOverheadTime, peakBatchThroughput.get(),
+                    "[%s] DETAILED PROGRESS REPORT%n" + "  Overall: Reads: %d, Writes: %d, Errors: %d, Skipped: %d%n"
+                            + "  Partitions: %d/%d (%.1f%% success rate)%n" + "  Current Throughput: %.2f records/sec%n"
+                            + "  Batch Processing: %d batches processed%n" + "  Average Batch Size: %.1f records%n"
+                            + "  Average Batch Time: %.1fms (Connection: %.1fms, Data: %.1fms, Overhead: %.1fms)%n"
+                            + "  Peak Batch Throughput: %d records/sec%n"
+                            + "  Time Breakdown: Connection %.1f%%, Data Processing %.1f%%, Overhead %.1f%%%n"
+                            + "  ==========================================%n",
+                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")), totalReads.get(),
+                    totalWrites.get(), totalErrors.get(), totalSkipped.get(), totalPartitionsProcessed.get(),
+                    totalPartitionsProcessed.get() + totalPartitionsFailed.get(),
+                    totalPartitionsProcessed.get() > 0 ? (100.0 * totalPartitionsProcessed.get()
+                            / (totalPartitionsProcessed.get() + totalPartitionsFailed.get())) : 0.0,
+                    currentThroughput, totalBatchesProcessed.get(), avgBatchSize, avgBatchTime, avgConnectionTime,
+                    avgDataProcessingTime, avgOverheadTime, peakBatchThroughput.get(),
                     totalBatchTime.get() > 0 ? (100.0 * totalConnectionTime.get() / totalBatchTime.get()) : 0.0,
                     totalBatchTime.get() > 0 ? (100.0 * totalDataProcessingTime.get() / totalBatchTime.get()) : 0.0,
                     totalBatchTime.get() > 0 ? (100.0 * totalOverheadTime.get() / totalBatchTime.get()) : 0.0);
@@ -186,84 +189,103 @@ public class EnhancedPerformanceLogger {
         try {
             long totalTime = System.currentTimeMillis() - migrationStartTime;
             long totalRecords = totalWrites.get();
-            
+
             performanceWriter.println();
             performanceWriter.println("FINAL MIGRATION SUMMARY");
             performanceWriter.println("======================");
             performanceWriter.println("Migration completed at: " + LocalDateTime.now());
             performanceWriter.println("Total migration time: " + formatDuration(totalTime));
             performanceWriter.println();
-            
+
             // Overall statistics
             performanceWriter.println("OVERALL STATISTICS:");
             performanceWriter.println("  Total records read: " + totalReads.get());
             performanceWriter.println("  Total records written: " + totalWrites.get());
             performanceWriter.println("  Total errors: " + totalErrors.get());
             performanceWriter.println("  Total skipped: " + totalSkipped.get());
-            performanceWriter.println("  Success rate: " + (totalRecords > 0 ? String.format("%.2f%%", 100.0 * (totalRecords - totalErrors.get()) / totalRecords) : "0.00%"));
+            performanceWriter.println("  Success rate: " + (totalRecords > 0
+                    ? String.format("%.2f%%", 100.0 * (totalRecords - totalErrors.get()) / totalRecords) : "0.00%"));
             performanceWriter.println();
-            
+
             // Partition statistics
             performanceWriter.println("PARTITION PROCESSING:");
             performanceWriter.println("  Partitions processed: " + totalPartitionsProcessed.get());
             performanceWriter.println("  Partitions failed: " + totalPartitionsFailed.get());
-            performanceWriter.println("  Partition success rate: " + (totalPartitionsProcessed.get() + totalPartitionsFailed.get() > 0 ? 
-                String.format("%.2f%%", 100.0 * totalPartitionsProcessed.get() / (totalPartitionsProcessed.get() + totalPartitionsFailed.get())) : "0.00%"));
+            performanceWriter.println(
+                    "  Partition success rate: " + (totalPartitionsProcessed.get() + totalPartitionsFailed.get() > 0
+                            ? String.format("%.2f%%",
+                                    100.0 * totalPartitionsProcessed.get()
+                                            / (totalPartitionsProcessed.get() + totalPartitionsFailed.get()))
+                            : "0.00%"));
             performanceWriter.println();
-            
+
             // Performance metrics
             performanceWriter.println("PERFORMANCE METRICS:");
-            performanceWriter.println("  Average throughput: " + String.format("%.2f records/sec", totalRecords > 0 ? (totalRecords * 1000.0 / totalTime) : 0.0));
-            performanceWriter.println("  Peak throughput: " + String.format("%.2f records/sec", calculatePeakThroughput(totalRecords, totalTime)));
-            performanceWriter.println("  Data volume: " + String.format("%.2f GB", totalRecords * 0.0006)); // Assuming ~600 bytes per record
-            performanceWriter.println("  Data rate: " + String.format("%.2f GB/hour", totalRecords * 0.0006 * 3600000.0 / totalTime));
+            performanceWriter.println("  Average throughput: "
+                    + String.format("%.2f records/sec", totalRecords > 0 ? (totalRecords * 1000.0 / totalTime) : 0.0));
+            performanceWriter.println("  Peak throughput: "
+                    + String.format("%.2f records/sec", calculatePeakThroughput(totalRecords, totalTime)));
+            performanceWriter.println("  Data volume: " + String.format("%.2f GB", totalRecords * 0.0006)); // Assuming
+                                                                                                            // ~600
+                                                                                                            // bytes per
+                                                                                                            // record
+            performanceWriter.println(
+                    "  Data rate: " + String.format("%.2f GB/hour", totalRecords * 0.0006 * 3600000.0 / totalTime));
             performanceWriter.println();
-            
+
             // Batch processing analysis
             performanceWriter.println("BATCH PROCESSING ANALYSIS:");
             performanceWriter.println("  Total batches processed: " + totalBatchesProcessed.get());
-            performanceWriter.println("  Average batch size: " + String.format("%.1f records", totalBatchesProcessed.get() > 0 ? (double) totalBatchSize.get() / totalBatchesProcessed.get() : 0.0));
-            performanceWriter.println("  Average batch time: " + String.format("%.1f ms", totalBatchesProcessed.get() > 0 ? (double) totalBatchTime.get() / totalBatchesProcessed.get() : 0.0));
+            performanceWriter
+                    .println("  Average batch size: " + String.format("%.1f records", totalBatchesProcessed.get() > 0
+                            ? (double) totalBatchSize.get() / totalBatchesProcessed.get() : 0.0));
+            performanceWriter
+                    .println("  Average batch time: " + String.format("%.1f ms", totalBatchesProcessed.get() > 0
+                            ? (double) totalBatchTime.get() / totalBatchesProcessed.get() : 0.0));
             performanceWriter.println("  Peak batch throughput: " + peakBatchThroughput.get() + " records/sec");
             performanceWriter.println();
-            
+
             // Time breakdown analysis
             performanceWriter.println("TIME BREAKDOWN ANALYSIS:");
             if (totalBatchTime.get() > 0) {
-                performanceWriter.println("  Connection time: " + String.format("%.1f ms (%.1f%%)", 
-                    (double) totalConnectionTime.get() / totalBatchesProcessed.get(), 
-                    100.0 * totalConnectionTime.get() / totalBatchTime.get()));
-                performanceWriter.println("  Data processing time: " + String.format("%.1f ms (%.1f%%)", 
-                    (double) totalDataProcessingTime.get() / totalBatchesProcessed.get(), 
-                    100.0 * totalDataProcessingTime.get() / totalBatchTime.get()));
-                performanceWriter.println("  Overhead time: " + String.format("%.1f ms (%.1f%%)", 
-                    (double) totalOverheadTime.get() / totalBatchesProcessed.get(), 
-                    100.0 * totalOverheadTime.get() / totalBatchTime.get()));
+                performanceWriter.println("  Connection time: " + String.format("%.1f ms (%.1f%%)",
+                        (double) totalConnectionTime.get() / totalBatchesProcessed.get(),
+                        100.0 * totalConnectionTime.get() / totalBatchTime.get()));
+                performanceWriter.println("  Data processing time: " + String.format("%.1f ms (%.1f%%)",
+                        (double) totalDataProcessingTime.get() / totalBatchesProcessed.get(),
+                        100.0 * totalDataProcessingTime.get() / totalBatchTime.get()));
+                performanceWriter.println("  Overhead time: " + String.format("%.1f ms (%.1f%%)",
+                        (double) totalOverheadTime.get() / totalBatchesProcessed.get(),
+                        100.0 * totalOverheadTime.get() / totalBatchTime.get()));
             }
             performanceWriter.println();
-            
+
             // Performance recommendations
             performanceWriter.println("PERFORMANCE RECOMMENDATIONS:");
             if (totalBatchTime.get() > 0) {
                 double connectionPercentage = 100.0 * totalConnectionTime.get() / totalBatchTime.get();
                 double dataPercentage = 100.0 * totalDataProcessingTime.get() / totalBatchTime.get();
                 double overheadPercentage = 100.0 * totalOverheadTime.get() / totalBatchTime.get();
-                
+
                 if (connectionPercentage > 30) {
-                    performanceWriter.println("  ⚠️  High connection overhead (" + String.format("%.1f", connectionPercentage) + "%) - Consider increasing batch size");
+                    performanceWriter.println("  ⚠️  High connection overhead ("
+                            + String.format("%.1f", connectionPercentage) + "%) - Consider increasing batch size");
                 }
                 if (dataPercentage < 50) {
-                    performanceWriter.println("  ⚠️  Low data processing ratio (" + String.format("%.1f", dataPercentage) + "%) - Consider optimizing data processing");
+                    performanceWriter.println("  ⚠️  Low data processing ratio ("
+                            + String.format("%.1f", dataPercentage) + "%) - Consider optimizing data processing");
                 }
                 if (overheadPercentage > 20) {
-                    performanceWriter.println("  ⚠️  High overhead (" + String.format("%.1f", overheadPercentage) + "%) - Consider reducing batch operations");
+                    performanceWriter.println("  ⚠️  High overhead (" + String.format("%.1f", overheadPercentage)
+                            + "%) - Consider reducing batch operations");
                 }
                 if (connectionPercentage < 20 && dataPercentage > 70) {
-                    performanceWriter.println("  ✅ Good performance balance - Connection and data processing are well optimized");
+                    performanceWriter.println(
+                            "  ✅ Good performance balance - Connection and data processing are well optimized");
                 }
             }
             performanceWriter.println();
-            
+
             performanceWriter.println("Migration Summary Complete");
             performanceWriter.println("==========================");
 

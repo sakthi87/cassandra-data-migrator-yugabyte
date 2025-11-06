@@ -48,6 +48,14 @@ public class CentralizedPerformanceLogger {
     private static final AtomicLong totalPartitionsProcessed = new AtomicLong(0);
     private static final AtomicLong totalPartitionsFailed = new AtomicLong(0);
 
+    // Detailed batch processing metrics
+    private static final AtomicLong totalBatchesProcessed = new AtomicLong(0);
+    private static final AtomicLong totalBatchTime = new AtomicLong(0);
+    private static final AtomicLong totalBatchSize = new AtomicLong(0);
+    private static final AtomicLong peakBatchThroughput = new AtomicLong(0);
+    private static final AtomicLong totalConnectionTime = new AtomicLong(0);
+    private static final AtomicLong totalDataProcessingTime = new AtomicLong(0);
+
     // Start time for the entire migration
     private static final long migrationStartTime = System.currentTimeMillis();
 
