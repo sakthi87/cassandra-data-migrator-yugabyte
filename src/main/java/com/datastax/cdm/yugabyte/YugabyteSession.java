@@ -16,10 +16,8 @@
 package com.datastax.cdm.yugabyte;
 
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +27,8 @@ import com.datastax.cdm.properties.IPropertyHelper;
 import com.datastax.cdm.properties.KnownProperties;
 import com.datastax.cdm.schema.YugabyteTable;
 import com.datastax.cdm.yugabyte.statement.YugabyteUpsertStatement;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
 public class YugabyteSession {
     public Logger logger = LoggerFactory.getLogger(this.getClass().getName());
@@ -39,6 +39,7 @@ public class YugabyteSession {
     private final YugabyteTable yugabyteTable;
     private final boolean isOrigin;
     private PKFactory pkFactory;
+    private HikariDataSource dataSource; // Keep reference for proper cleanup
 
     public YugabyteSession(IPropertyHelper propertyHelper, boolean isOrigin) {
         this.propertyHelper = propertyHelper;
@@ -75,135 +76,119 @@ public class YugabyteSession {
 
     private Connection initConnection(IPropertyHelper propertyHelper) {
         try {
-            // Debug: Check property keys
-            logger.info("Checking YugabyteDB properties:");
-            logger.info("  TARGET_HOST property key: {}", KnownProperties.TARGET_HOST);
-            logger.info("  TARGET_PORT property key: {}", KnownProperties.TARGET_PORT);
-            logger.info("  TARGET_DATABASE property key: {}", KnownProperties.TARGET_DATABASE);
-            logger.info("  TARGET_USERNAME property key: {}", KnownProperties.TARGET_USERNAME);
-            logger.info("  TARGET_PASSWORD property key: {}", KnownProperties.TARGET_PASSWORD);
+            logger.info("Initializing YugabyteDB connection with HikariCP and YBClusterAwareDataSource");
 
             String host = propertyHelper.getString(KnownProperties.TARGET_HOST);
-            // Port is defined as NUMBER type, so we need to get it as a number and convert to string
             Number portNumber = propertyHelper.getNumber(KnownProperties.TARGET_PORT);
             String port = (portNumber != null) ? portNumber.toString() : null;
             String database = propertyHelper.getString(KnownProperties.TARGET_DATABASE);
             String username = propertyHelper.getString(KnownProperties.TARGET_USERNAME);
             String password = propertyHelper.getString(KnownProperties.TARGET_PASSWORD);
 
-            // Debug logging to help identify the issue
+            // Validate required parameters
+            if (port == null || port.trim().isEmpty()) {
+                throw new RuntimeException(
+                        "YugabyteDB port is null or empty. Check your properties file for 'spark.cdm.connect.target.yugabyte.port'");
+            }
+
             logger.info("YugabyteDB Connection Parameters:");
             logger.info("  Host: {}", host);
             logger.info("  Port: {}", port);
             logger.info("  Database: {}", database);
             logger.info("  Username: {}", username);
 
-            // Validate that port is not null or empty
-            if (port == null || port.trim().isEmpty()) {
-                throw new RuntimeException(
-                        "YugabyteDB port is null or empty. Check your properties file for 'spark.cdm.connect.target.yugabyte.port'");
+            // Configure YBClusterAwareDataSource with HikariCP as per YugabyteDB documentation
+            // Reference: https://docs.yugabyte.com/preview/develop/drivers-orms/java/yugabyte-jdbc-reference/
+            Properties poolProperties = new Properties();
+            poolProperties.setProperty("dataSourceClassName", "com.yugabyte.ysql.YBClusterAwareDataSource");
+            
+            // Basic connection properties
+            poolProperties.setProperty("dataSource.serverName", host);
+            poolProperties.setProperty("dataSource.portNumber", port);
+            poolProperties.setProperty("dataSource.databaseName", database);
+            poolProperties.setProperty("dataSource.user", username);
+            poolProperties.setProperty("dataSource.password", password);
+
+            // Additional endpoints for load balancing (optional)
+            String additionalEndpoints = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS);
+            if (additionalEndpoints != null && !additionalEndpoints.trim().isEmpty()) {
+                poolProperties.setProperty("dataSource.additionalEndpoints", additionalEndpoints);
+                logger.info("  Additional Endpoints: {}", additionalEndpoints);
             }
 
-            // Use YugabyteDB Smart Driver JDBC URL
-            // Smart Driver provides: load balancing, topology awareness, better performance
-            String url = String.format("jdbc:yugabytedb://%s:%s/%s", host, port, database);
+            // Topology keys for geo-location aware load balancing (optional)
+            String topologyKeys = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_TOPOLOGY_KEYS);
+            if (topologyKeys != null && !topologyKeys.trim().isEmpty()) {
+                poolProperties.setProperty("dataSource.topologyKeys", topologyKeys);
+                logger.info("  Topology Keys: {}", topologyKeys);
+            }
 
-            Properties props = new Properties();
-            props.setProperty("user", username);
-            props.setProperty("password", password);
-
-            // YugabyteDB Smart Driver specific properties
-            props.setProperty("load-balance", "true"); // Enable cluster-aware load balancing
-            props.setProperty("topology-keys", ""); // Auto-detect topology (can specify datacenter:region:zone)
-
-            // SSL configuration - check if SSL is enabled via properties
+            // SSL configuration
             String sslEnabled = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSL_ENABLED);
             String sslMode = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLMODE);
             String sslRootCert = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLROOTCERT);
-
+            
             if (sslEnabled != null && "true".equalsIgnoreCase(sslEnabled)) {
-                // SSL is enabled
-                props.setProperty("ssl", "true");
+                poolProperties.setProperty("dataSource.ssl", "true");
                 if (sslMode != null && !sslMode.isEmpty()) {
-                    props.setProperty("sslmode", sslMode); // verify-full, require, prefer, etc.
+                    poolProperties.setProperty("dataSource.sslmode", sslMode);
                 } else {
-                    props.setProperty("sslmode", "require"); // Default to require if enabled
+                    poolProperties.setProperty("dataSource.sslmode", "require");
                 }
                 if (sslRootCert != null && !sslRootCert.isEmpty()) {
-                    props.setProperty("sslrootcert", sslRootCert);
+                    poolProperties.setProperty("dataSource.sslrootcert", sslRootCert);
                 }
-                logger.info("SSL enabled for YugabyteDB connection with sslmode: {}", props.getProperty("sslmode"));
+                logger.info("  SSL enabled with sslmode: {}", poolProperties.getProperty("dataSource.sslmode"));
             } else {
-                // SSL disabled (default behavior)
-                props.setProperty("ssl", "false");
-                props.setProperty("sslmode", "disable");
-                props.setProperty("sslrootcert", "");
-                logger.info("SSL disabled for YugabyteDB connection");
+                poolProperties.setProperty("dataSource.ssl", "false");
+                poolProperties.setProperty("dataSource.sslmode", "disable");
+                logger.info("  SSL disabled");
             }
 
-            // Connection pooling and retry settings to handle "too many clients" errors
-            props.setProperty("maxConnections", "5"); // Reduce concurrent connections per session
-            props.setProperty("connectionTimeout", "60000"); // Increase to 60 seconds
-            props.setProperty("socketTimeout", "120000"); // Increase to 2 minutes
-            props.setProperty("loginTimeout", "60"); // Increase to 60 seconds
-            props.setProperty("tcpKeepAlive", "true");
-            props.setProperty("ApplicationName", "CassandraDataMigrator");
+            // HikariCP pool configuration
+            Number maxPoolSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_POOL_MAX_SIZE);
+            Number minPoolSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_POOL_MIN_SIZE);
+            
+            poolProperties.setProperty("maximumPoolSize", 
+                (maxPoolSize != null) ? maxPoolSize.toString() : "10");
+            poolProperties.setProperty("minimumIdle", 
+                (minPoolSize != null) ? minPoolSize.toString() : "2");
+            
+            // Connection timeout settings
+            poolProperties.setProperty("connectionTimeout", "60000"); // 60 seconds
+            poolProperties.setProperty("idleTimeout", "300000"); // 5 minutes
+            poolProperties.setProperty("maxLifetime", "1800000"); // 30 minutes
+            poolProperties.setProperty("leakDetectionThreshold", "60000"); // 60 seconds
+            
+            // Pool name for monitoring
+            poolProperties.setProperty("poolName", "CDM-YugabyteDB-Pool");
 
-            // Additional timeout settings
-            props.setProperty("connectTimeout", "60000"); // Connection establishment timeout
-            props.setProperty("readTimeout", "120000"); // Read operation timeout
-            props.setProperty("cancelSignalTimeout", "30000"); // Cancel signal timeout
+            logger.info("HikariCP Pool Configuration:");
+            logger.info("  Maximum Pool Size: {}", poolProperties.getProperty("maximumPoolSize"));
+            logger.info("  Minimum Idle: {}", poolProperties.getProperty("minimumIdle"));
+            logger.info("  Connection Timeout: {}ms", poolProperties.getProperty("connectionTimeout"));
 
-            // Connection retry logic
-            int maxRetries = 5;
-            int retryDelay = 2000; // 2 seconds
-            Connection conn = null;
+            // Create HikariConfig and validate
+            HikariConfig config = new HikariConfig(poolProperties);
+            config.validate();
 
-            for (int attempt = 1; attempt <= maxRetries; attempt++) {
-                try {
-                    logger.info("Connecting to YugabyteDB at: {} (attempt {}/{})", url, attempt, maxRetries);
-                    conn = DriverManager.getConnection(url, props);
-                    logger.info("Successfully connected to YugabyteDB on attempt {}", attempt);
-                    break;
-                } catch (SQLException e) {
-                    String errorMessage = e.getMessage().toLowerCase();
-                    if (errorMessage.contains("too many clients already") || errorMessage.contains("read timed out")
-                            || errorMessage.contains("connection timed out")
-                            || errorMessage.contains("socket timeout")) {
+            // Create HikariDataSource with YBClusterAwareDataSource
+            this.dataSource = new HikariDataSource(config);
+            
+            logger.info("Successfully created HikariDataSource with YBClusterAwareDataSource");
 
-                        logger.warn("Connection attempt {} failed due to {} (attempt {}/{}). Retrying in {}ms...",
-                                attempt, errorMessage.contains("too many clients") ? "connection limit" : "timeout",
-                                attempt, maxRetries, retryDelay);
-
-                        if (attempt < maxRetries) {
-                            try {
-                                TimeUnit.MILLISECONDS.sleep(retryDelay);
-                                retryDelay *= 2; // Exponential backoff
-                            } catch (InterruptedException ie) {
-                                Thread.currentThread().interrupt();
-                                throw new RuntimeException("Connection interrupted", ie);
-                            }
-                        } else {
-                            logger.error("Failed to connect after {} attempts due to {}", maxRetries,
-                                    errorMessage.contains("too many clients") ? "connection limit" : "timeout");
-                            throw e;
-                        }
-                    } else {
-                        logger.error("Failed to connect to YugabyteDB on attempt {}", attempt, e);
-                        throw e;
-                    }
-                }
-            }
-
-            if (conn == null) {
-                throw new RuntimeException("Failed to establish connection after all retry attempts");
-            }
+            // Get connection from pool
+            Connection conn = dataSource.getConnection();
+            logger.info("Successfully obtained connection from HikariCP pool");
 
             return conn;
 
         } catch (SQLException e) {
             logger.error("Failed to connect to YugabyteDB", e);
             throw new RuntimeException("Failed to connect to YugabyteDB", e);
+        } catch (Exception e) {
+            logger.error("Failed to initialize YugabyteDB connection pool", e);
+            throw new RuntimeException("Failed to initialize YugabyteDB connection pool", e);
         }
     }
 
@@ -211,6 +196,12 @@ public class YugabyteSession {
         try {
             if (connection != null && !connection.isClosed()) {
                 connection.close();
+                logger.info("Closed YugabyteDB connection");
+            }
+            // Close HikariCP data source to properly cleanup the connection pool
+            if (dataSource != null && !dataSource.isClosed()) {
+                dataSource.close();
+                logger.info("Closed HikariCP data source and connection pool");
             }
         } catch (SQLException e) {
             logger.error("Error closing YugabyteDB connection", e);

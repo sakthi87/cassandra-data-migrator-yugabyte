@@ -188,6 +188,13 @@
 			<artifactId>jdbc-yugabytedb</artifactId>
 			<version>42.7.3-yb-4</version>
 		</dependency>
+		<!-- HikariCP Connection Pool for YugabyteDB Smart Driver -->
+		<!-- Required for proper connection pooling with YBClusterAwareDataSource -->
+		<dependency>
+			<groupId>com.zaxxer</groupId>
+			<artifactId>HikariCP</artifactId>
+			<version>5.0.1</version>
+		</dependency>
 		<!-- Keep PostgreSQL driver as fallback (optional, can be removed if not needed) -->
 		<!--
 		<dependency>

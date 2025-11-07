@@ -7,6 +7,54 @@
 
 Migrate and Validate Tables between Origin and Target Cassandra Clusters.
 
+## YugabyteDB Migration Support
+
+This fork includes enhanced support for migrating data to **YugabyteDB**:
+- **YSQL (PostgreSQL)** migration using YugabyteDB Smart Driver with HikariCP connection pooling
+- **YCQL (Cassandra)** migration using standard Cassandra drivers
+
+### Quick Start for YugabyteDB Migration
+
+**Pre-configured property files are available:**
+- `yugabyte-ysql-migration.properties` - For YSQL (PostgreSQL) migration
+- `yugabyte-ycql-migration.properties` - For YCQL (Cassandra) migration
+- `migration.properties.template` - Template for custom configurations
+
+1. **Choose the appropriate properties file and update with your connection details:**
+   - For YSQL: Edit `yugabyte-ysql-migration.properties`
+   - For YCQL: Edit `yugabyte-ycql-migration.properties`
+
+2. **For YSQL migration:**
+   ```bash
+   spark-submit --properties-file yugabyte-ysql-migration.properties \
+     --conf spark.cdm.schema.origin.keyspaceTable="keyspace.table" \
+     --master "local[*]" --driver-memory 6G --executor-memory 6G \
+     --class com.datastax.cdm.job.YugabyteMigrate \
+     cassandra-data-migrator-5.x.x.jar
+   ```
+
+3. **For YCQL migration:**
+   ```bash
+   spark-submit --properties-file yugabyte-ycql-migration.properties \
+     --conf spark.cdm.schema.origin.keyspaceTable="keyspace.table" \
+     --master "local[*]" --driver-memory 6G --executor-memory 6G \
+     --class com.datastax.cdm.job.Migrate \
+     cassandra-data-migrator-5.x.x.jar
+   ```
+
+**Key Differences:**
+- **YSQL**: Uses `spark.cdm.connect.target.yugabyte.*` properties, port 5433, requires database name
+- **YCQL**: Uses `spark.cdm.connect.target.*` properties, port 9042, no database property needed
+
+### YugabyteDB Smart Driver Features
+
+- **Connection Pooling**: HikariCP with configurable pool size
+- **Load Balancing**: Cluster-aware load balancing via YBClusterAwareDataSource
+- **Topology Awareness**: Geo-location aware routing
+- **SSL Support**: Configurable SSL/TLS connections
+
+See `migration.properties.template` for all configuration options.
+
 > [!IMPORTANT]
 > Please note this job has been tested with spark version [3.5.6](https://archive.apache.org/dist/spark/spark-3.5.6/)
 

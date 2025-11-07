@@ -60,6 +60,12 @@ public class KnownProperties {
     public static final String TARGET_YUGABYTE_SSL_ENABLED = "spark.cdm.connect.target.yugabyte.ssl.enabled";
     public static final String TARGET_YUGABYTE_SSLMODE = "spark.cdm.connect.target.yugabyte.sslmode";
     public static final String TARGET_YUGABYTE_SSLROOTCERT = "spark.cdm.connect.target.yugabyte.sslrootcert";
+    
+    // YugabyteDB YSQL Connection Pooling configuration (HikariCP)
+    public static final String TARGET_YUGABYTE_POOL_MAX_SIZE = "spark.cdm.connect.target.yugabyte.pool.maxSize";
+    public static final String TARGET_YUGABYTE_POOL_MIN_SIZE = "spark.cdm.connect.target.yugabyte.pool.minSize";
+    public static final String TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS = "spark.cdm.connect.target.yugabyte.additionalEndpoints";
+    public static final String TARGET_YUGABYTE_TOPOLOGY_KEYS = "spark.cdm.connect.target.yugabyte.topologyKeys";
 
     // ==========================================================================
     // Astra DevOps API Parameters
@@ -116,6 +122,14 @@ public class KnownProperties {
         types.put(TARGET_YUGABYTE_SSLMODE, PropertyType.STRING);
         defaults.put(TARGET_YUGABYTE_SSLMODE, "disable");
         types.put(TARGET_YUGABYTE_SSLROOTCERT, PropertyType.STRING);
+        
+        // YugabyteDB YSQL Connection Pooling configuration
+        types.put(TARGET_YUGABYTE_POOL_MAX_SIZE, PropertyType.NUMBER);
+        defaults.put(TARGET_YUGABYTE_POOL_MAX_SIZE, "10");
+        types.put(TARGET_YUGABYTE_POOL_MIN_SIZE, PropertyType.NUMBER);
+        defaults.put(TARGET_YUGABYTE_POOL_MIN_SIZE, "2");
+        types.put(TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS, PropertyType.STRING);
+        types.put(TARGET_YUGABYTE_TOPOLOGY_KEYS, PropertyType.STRING);
 
         // Astra DevOps API parameters
         types.put(ORIGIN_ASTRA_DATABASE_ID, PropertyType.STRING);

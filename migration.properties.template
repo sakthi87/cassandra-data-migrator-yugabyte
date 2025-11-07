@@ -1,0 +1,109 @@
+# =============================================================================
+# CASSANDRA DATA MIGRATOR - MIGRATION PROPERTIES TEMPLATE
+# =============================================================================
+# This is a template properties file for migrating data to YugabyteDB
+# Copy this file and update with your actual connection details
+#
+# For YSQL (PostgreSQL) migration: Use this file with YugabyteMigrate class
+# For YCQL (Cassandra) migration: Use this file with Migrate class
+# =============================================================================
+
+# =============================================================================
+# CASSANDRA SOURCE CONFIGURATION
+# =============================================================================
+spark.cdm.connect.origin.host=your-cassandra-host
+spark.cdm.connect.origin.port=9042
+spark.cdm.connect.origin.username=your-username
+spark.cdm.connect.origin.password=your-password
+spark.cdm.connect.origin.localDC=datacenter1
+spark.cdm.connect.origin.consistencyLevel=LOCAL_ONE
+
+# =============================================================================
+# YUGABYTEDB TARGET CONFIGURATION
+# =============================================================================
+# For YSQL (PostgreSQL) - use these properties:
+spark.cdm.connect.target.yugabyte.host=your-yugabyte-host
+spark.cdm.connect.target.yugabyte.port=5433
+spark.cdm.connect.target.yugabyte.database=your-database
+spark.cdm.connect.target.yugabyte.username=yugabyte
+spark.cdm.connect.target.yugabyte.password=your-password
+
+# HikariCP Connection Pool Configuration (for YSQL)
+spark.cdm.connect.target.yugabyte.pool.maxSize=10
+spark.cdm.connect.target.yugabyte.pool.minSize=2
+
+# Optional: Additional endpoints for load balancing
+# spark.cdm.connect.target.yugabyte.additionalEndpoints=127.0.0.2:5433,127.0.0.3:5433
+
+# Optional: Topology keys for geo-location aware load balancing
+# spark.cdm.connect.target.yugabyte.topologyKeys=aws.us-east-1.us-east-1a
+
+# For YCQL (Cassandra) - use these properties instead:
+# spark.cdm.connect.target.host=your-yugabyte-host
+# spark.cdm.connect.target.port=9042
+# spark.cdm.connect.target.username=yugabyte
+# spark.cdm.connect.target.password=your-password
+
+# =============================================================================
+# SCHEMA CONFIGURATION
+# =============================================================================
+spark.cdm.schema.origin.keyspaceTable=your_keyspace.your_table
+spark.cdm.schema.target.keyspaceTable=your_keyspace.your_table
+
+# =============================================================================
+# SPARK CONFIGURATION
+# =============================================================================
+spark.executor.cores=4
+spark.executor.instances=4
+spark.executor.memory=6G
+spark.driver.memory=6G
+spark.sql.adaptive.enabled=true
+spark.sql.adaptive.coalescePartitions.enabled=true
+spark.sql.adaptive.skewJoin.enabled=true
+spark.serializer=org.apache.spark.serializer.KryoSerializer
+spark.sql.adaptive.advisoryPartitionSizeInBytes=32MB
+spark.network.timeout=600s
+spark.sql.broadcastTimeout=600s
+
+# =============================================================================
+# CDM PERFORMANCE CONFIGURATION
+# =============================================================================
+spark.cdm.perfops.numParts=400
+spark.cdm.perfops.ratelimit.origin=5000
+spark.cdm.perfops.ratelimit.target=5000
+spark.cdm.perfops.batchSize=5000
+spark.cdm.perfops.fetchSizeInRows=5000
+
+# =============================================================================
+# CONNECTION SETTINGS
+# =============================================================================
+spark.cdm.connect.origin.timeout=120000
+spark.cdm.connect.target.yugabyte.timeout=120000
+
+# =============================================================================
+# SSL/TLS CONFIGURATION (Optional)
+# =============================================================================
+# For YSQL SSL (if required):
+# spark.cdm.connect.target.yugabyte.ssl.enabled=true
+# spark.cdm.connect.target.yugabyte.sslmode=require
+# spark.cdm.connect.target.yugabyte.sslrootcert=/path/to/ca.crt
+
+# For YCQL SSL (if required):
+# spark.cdm.connect.target.tls.enabled=true
+# spark.cdm.connect.target.tls.trustStore.path=/path/to/truststore.jks
+# spark.cdm.connect.target.tls.trustStore.password=YourPassword
+# spark.cdm.connect.target.tls.trustStore.type=JKS
+
+# =============================================================================
+# AUTOCORRECT AND TRACKING
+# =============================================================================
+spark.cdm.autocorrect.missing=false
+spark.cdm.autocorrect.mismatch=false
+spark.cdm.trackRun=false
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+spark.cdm.log.directory=migration_logs
+spark.cdm.log.level=INFO
+
