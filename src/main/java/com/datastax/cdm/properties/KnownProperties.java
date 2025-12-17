@@ -41,12 +41,14 @@ public class KnownProperties {
     public static final String CONNECT_ORIGIN_SCB = "spark.cdm.connect.origin.scb";
     public static final String CONNECT_ORIGIN_USERNAME = "spark.cdm.connect.origin.username";
     public static final String CONNECT_ORIGIN_PASSWORD = "spark.cdm.connect.origin.password";
+    public static final String CONNECT_ORIGIN_LOCAL_DC = "spark.cdm.connect.origin.local_dc";
 
     public static final String CONNECT_TARGET_HOST = "spark.cdm.connect.target.host";
     public static final String CONNECT_TARGET_PORT = "spark.cdm.connect.target.port";
     public static final String CONNECT_TARGET_SCB = "spark.cdm.connect.target.scb";
     public static final String CONNECT_TARGET_USERNAME = "spark.cdm.connect.target.username";
     public static final String CONNECT_TARGET_PASSWORD = "spark.cdm.connect.target.password";
+    public static final String CONNECT_TARGET_LOCAL_DC = "spark.cdm.connect.target.local_dc";
 
     // YugabyteDB YSQL connection parameters
     public static final String TARGET_HOST = "spark.cdm.connect.target.yugabyte.host";
@@ -66,6 +68,14 @@ public class KnownProperties {
     public static final String TARGET_YUGABYTE_POOL_MIN_SIZE = "spark.cdm.connect.target.yugabyte.pool.minSize";
     public static final String TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS = "spark.cdm.connect.target.yugabyte.additionalEndpoints";
     public static final String TARGET_YUGABYTE_TOPOLOGY_KEYS = "spark.cdm.connect.target.yugabyte.topologyKeys";
+    
+    // YugabyteDB YSQL Performance Tuning (Phase 1+2 optimizations)
+    public static final String TARGET_YUGABYTE_BATCH_SIZE = "spark.cdm.connect.target.yugabyte.batchSize";
+    public static final String TARGET_YUGABYTE_LOAD_BALANCE = "spark.cdm.connect.target.yugabyte.loadBalance";
+    public static final String TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS = "spark.cdm.connect.target.yugabyte.rewriteBatchedInserts";
+    public static final String TARGET_YUGABYTE_PREPARE_THRESHOLD = "spark.cdm.connect.target.yugabyte.prepareThreshold";
+    public static final String TARGET_YUGABYTE_SOCKET_TIMEOUT = "spark.cdm.connect.target.yugabyte.socketTimeout";
+    public static final String TARGET_YUGABYTE_TCP_KEEPALIVE = "spark.cdm.connect.target.yugabyte.tcpKeepAlive";
 
     // ==========================================================================
     // Astra DevOps API Parameters
@@ -91,6 +101,7 @@ public class KnownProperties {
         defaults.put(CONNECT_ORIGIN_USERNAME, "cassandra");
         types.put(CONNECT_ORIGIN_PASSWORD, PropertyType.STRING);
         defaults.put(CONNECT_ORIGIN_PASSWORD, "cassandra");
+        types.put(CONNECT_ORIGIN_LOCAL_DC, PropertyType.STRING);
 
         types.put(CONNECT_TARGET_HOST, PropertyType.STRING);
         defaults.put(CONNECT_TARGET_HOST, "localhost");
@@ -101,6 +112,7 @@ public class KnownProperties {
         defaults.put(CONNECT_TARGET_USERNAME, "cassandra");
         types.put(CONNECT_TARGET_PASSWORD, PropertyType.STRING);
         defaults.put(CONNECT_TARGET_PASSWORD, "cassandra");
+        types.put(CONNECT_TARGET_LOCAL_DC, PropertyType.STRING);
 
         // YugabyteDB YSQL connection parameters
         types.put(TARGET_HOST, PropertyType.STRING);
@@ -125,11 +137,25 @@ public class KnownProperties {
         
         // YugabyteDB YSQL Connection Pooling configuration
         types.put(TARGET_YUGABYTE_POOL_MAX_SIZE, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_POOL_MAX_SIZE, "10");
+        defaults.put(TARGET_YUGABYTE_POOL_MAX_SIZE, "20");  // Increased for better parallelism
         types.put(TARGET_YUGABYTE_POOL_MIN_SIZE, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_POOL_MIN_SIZE, "2");
+        defaults.put(TARGET_YUGABYTE_POOL_MIN_SIZE, "5");   // Increased minimum idle
         types.put(TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS, PropertyType.STRING);
         types.put(TARGET_YUGABYTE_TOPOLOGY_KEYS, PropertyType.STRING);
+        
+        // YugabyteDB YSQL Performance Tuning (Phase 1+2 optimizations)
+        types.put(TARGET_YUGABYTE_BATCH_SIZE, PropertyType.NUMBER);
+        defaults.put(TARGET_YUGABYTE_BATCH_SIZE, "25");  // Optimal batch size for YugabyteDB
+        types.put(TARGET_YUGABYTE_LOAD_BALANCE, PropertyType.BOOLEAN);
+        defaults.put(TARGET_YUGABYTE_LOAD_BALANCE, "true");  // Enable Smart Driver load balancing
+        types.put(TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS, PropertyType.BOOLEAN);
+        defaults.put(TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS, "true");  // Critical for batch performance!
+        types.put(TARGET_YUGABYTE_PREPARE_THRESHOLD, PropertyType.NUMBER);
+        defaults.put(TARGET_YUGABYTE_PREPARE_THRESHOLD, "5");  // Use server-side prepared statements after 5 uses
+        types.put(TARGET_YUGABYTE_SOCKET_TIMEOUT, PropertyType.NUMBER);
+        defaults.put(TARGET_YUGABYTE_SOCKET_TIMEOUT, "60000");  // 60 seconds
+        types.put(TARGET_YUGABYTE_TCP_KEEPALIVE, PropertyType.BOOLEAN);
+        defaults.put(TARGET_YUGABYTE_TCP_KEEPALIVE, "true");
 
         // Astra DevOps API parameters
         types.put(ORIGIN_ASTRA_DATABASE_ID, PropertyType.STRING);

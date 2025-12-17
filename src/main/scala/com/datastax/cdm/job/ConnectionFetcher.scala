@@ -23,7 +23,7 @@ import com.datastax.cdm.data.DataUtility.generateSCB
 import com.datastax.cdm.data.{AstraDevOpsClient, PKFactory}
 import com.datastax.cdm.data.PKFactory.Side
 
-// TODO: CDM-31 - add localDC configuration support
+// CDM-31: localDC configuration support - IMPLEMENTED
 class ConnectionFetcher(propertyHelper: IPropertyHelper, testAstraClient: AstraDevOpsClient = null) extends Serializable {
   val logger: Logger = LoggerFactory.getLogger(this.getClass.getName)
   
@@ -98,12 +98,25 @@ class ConnectionFetcher(propertyHelper: IPropertyHelper, testAstraClient: AstraD
 
   def getConnection(config: SparkConf, side: Side, consistencyLevel: String, runId: Long): CassandraConnector = {
     val connectionDetails = getConnectionDetails(side)
+    
+    // CDM-31: Set local_dc per side (origin or target)
+    var configWithLocalDC = config
+    val localDC = if (Side.ORIGIN.equals(side)) {
+      propertyHelper.getAsString(KnownProperties.CONNECT_ORIGIN_LOCAL_DC)
+    } else {
+      propertyHelper.getAsString(KnownProperties.CONNECT_TARGET_LOCAL_DC)
+    }
+    
+    if (localDC != null && !localDC.trim.isEmpty) {
+      configWithLocalDC = configWithLocalDC.set("spark.cassandra.connection.local_dc", localDC)
+      logger.info(s"PARAM -- Local DC for $side: $localDC")
+    }
 
     logger.info("PARAM --  SSL Enabled: "+connectionDetails.sslEnabled);
 
     if (connectionDetails.scbPath.nonEmpty) {
       logger.info("Connecting to "+side+" using SCB "+connectionDetails.scbPath);
-      return CassandraConnector(config
+      return CassandraConnector(configWithLocalDC
         .set("spark.cassandra.auth.username", connectionDetails.username)
         .set("spark.cassandra.auth.password", connectionDetails.password)
         .set("spark.cassandra.input.consistency.level", consistencyLevel)
@@ -114,7 +127,7 @@ class ConnectionFetcher(propertyHelper: IPropertyHelper, testAstraClient: AstraD
       val scbFile = generateSCB(connectionDetails.host, connectionDetails.port, 
       	connectionDetails.trustStorePassword, connectionDetails.trustStorePath, 
       	connectionDetails.keyStorePassword, connectionDetails.keyStorePath, side, runId)
-      return CassandraConnector(config
+      return CassandraConnector(configWithLocalDC
         .set("spark.cassandra.auth.username", connectionDetails.username)
         .set("spark.cassandra.auth.password", connectionDetails.password)
         .set("spark.cassandra.input.consistency.level", consistencyLevel)
@@ -128,7 +141,7 @@ class ConnectionFetcher(propertyHelper: IPropertyHelper, testAstraClient: AstraD
         enabledAlgorithmsVar = "TLS_RSA_WITH_AES_128_CBC_SHA, TLS_RSA_WITH_AES_256_CBC_SHA"
       }
 
-      return CassandraConnector(config
+      return CassandraConnector(configWithLocalDC
         .set("spark.cassandra.auth.username", connectionDetails.username)
         .set("spark.cassandra.auth.password", connectionDetails.password)
         .set("spark.cassandra.input.consistency.level", consistencyLevel)
@@ -146,7 +159,7 @@ class ConnectionFetcher(propertyHelper: IPropertyHelper, testAstraClient: AstraD
     } else {
       logger.info("Connecting to "+side+" at "+connectionDetails.host+":"+connectionDetails.port);
 
-      return CassandraConnector(config.set("spark.cassandra.auth.username", connectionDetails.username)
+      return CassandraConnector(configWithLocalDC.set("spark.cassandra.auth.username", connectionDetails.username)
         .set("spark.cassandra.connection.ssl.enabled", connectionDetails.sslEnabled)
         .set("spark.cassandra.auth.password", connectionDetails.password)
         .set("spark.cassandra.input.consistency.level", consistencyLevel)
