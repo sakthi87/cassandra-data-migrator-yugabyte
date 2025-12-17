@@ -42,17 +42,14 @@ import com.datastax.oss.driver.api.core.cql.Row;
 
 /**
  * High-performance YugabyteDB Copy Job Session with Phase 1+2 optimizations.
- * 
- * Performance Optimizations:
- * - Phase 1: PreparedStatement reuse (3-5x improvement)
- * - Phase 2: JDBC batching with batch-level rate limiting (5-10x improvement)
- * 
- * Key changes from original:
- * - Uses addToBatch() instead of execute() for each record
- * - Rate limiting at batch level, not per-record
- * - Automatic batch flush when batch size is reached
- * - Final flush at end of partition to handle remaining records
- * 
+ *
+ * Performance Optimizations: - Phase 1: PreparedStatement reuse (3-5x improvement) - Phase 2: JDBC batching with
+ * batch-level rate limiting (5-10x improvement)
+ *
+ * Key changes from original: - Uses addToBatch() instead of execute() for each record - Rate limiting at batch level,
+ * not per-record - Automatic batch flush when batch size is reached - Final flush at end of partition to handle
+ * remaining records
+ *
  * Expected throughput: 15-20K rows/sec (vs 2-8K rows/sec originally)
  */
 public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> implements Serializable {
@@ -65,7 +62,7 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
     private YugabyteUpsertStatement yugabyteUpsertStatement;
     private YugabyteSession yugabyteSession;
     private FailedRecordLogger failedRecordLogger;
-    
+
     // Batch processing tracking
     private int recordsInCurrentBatch = 0;
     private List<Record> currentBatchRecords = new ArrayList<>(); // For error tracking
@@ -90,7 +87,7 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
 
         isCounterTable = this.originSession.getCqlTable().isCounterTable();
         fetchSize = this.originSession.getCqlTable().getFetchSizeInRows();
-        
+
         // Get batch size from YugabyteDB configuration
         Number configuredBatchSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_BATCH_SIZE);
         this.batchSize = (configuredBatchSize != null) ? configuredBatchSize.intValue() : 25;
@@ -141,10 +138,8 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
     }
 
     /**
-     * Process a partition range with Phase 1+2 optimizations:
-     * - PreparedStatement reuse
-     * - JDBC batch processing
-     * - Batch-level rate limiting
+     * Process a partition range with Phase 1+2 optimizations: - PreparedStatement reuse - JDBC batch processing -
+     * Batch-level rate limiting
      */
     protected void processPartitionRange(PartitionRange range) {
         BigInteger min = range.getMin(), max = range.getMax();
@@ -180,18 +175,18 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
                         boolean batchWasFlushed = yugabyteUpsertStatement.addToBatch(r);
                         recordsInCurrentBatch++;
                         currentBatchRecords.add(r);
-                        
+
                         // If batch was flushed (reached batch size), apply rate limiting and update counters
                         if (batchWasFlushed) {
                             // Phase 2: Batch-level rate limiting (much more efficient!)
                             rateLimiterTarget.acquire(recordsInCurrentBatch);
                             jobCounter.increment(JobCounter.CounterType.WRITE, recordsInCurrentBatch);
-                            
+
                             // Reset batch tracking
                             recordsInCurrentBatch = 0;
                             currentBatchRecords.clear();
                         }
-                        
+
                     } catch (SQLException e) {
                         logger.error("Error adding record to batch for YugabyteDB: {}", r, e);
                         jobCounter.increment(JobCounter.CounterType.ERROR);
@@ -246,14 +241,14 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
             if (null != trackRunFeature) {
                 trackRunFeature.updateCdmRun(runId, min, TrackRun.RUN_STATUS.PASS, jobCounter.getMetrics());
             }
-            
+
             // Log batch statistics
             if (logger.isInfoEnabled()) {
-                logger.info("Partition complete. Total batches: {}, Total records written: {}", 
-                    yugabyteUpsertStatement.getTotalBatchesExecuted(),
-                    yugabyteUpsertStatement.getTotalRecordsWritten());
+                logger.info("Partition complete. Total batches: {}, Total records written: {}",
+                        yugabyteUpsertStatement.getTotalBatchesExecuted(),
+                        yugabyteUpsertStatement.getTotalRecordsWritten());
             }
-            
+
         } catch (Exception e) {
             jobCounter.increment(JobCounter.CounterType.ERROR,
                     jobCounter.getCount(JobCounter.CounterType.READ, true)
@@ -287,7 +282,7 @@ public class YugabyteCopyJobSession extends AbstractJobSession<PartitionRange> i
         if (yugabyteUpsertStatement != null) {
             yugabyteUpsertStatement.close();
         }
-        
+
         if (failedRecordLogger != null) {
             failedRecordLogger.close();
         }

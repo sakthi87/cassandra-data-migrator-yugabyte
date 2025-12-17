@@ -31,15 +31,13 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
 /**
- * YugabyteSession manages connections to YugabyteDB using the YugabyteDB Smart Driver
- * (YBClusterAwareDataSource) with HikariCP connection pooling.
- * 
- * Performance Optimizations (Phase 1+2):
- * - Connection pooling with HikariCP for better connection reuse
- * - YugabyteDB Smart Driver with load balancing enabled
- * - rewriteBatchedInserts=true for optimized batch INSERT performance
- * - Configurable prepareThreshold for server-side prepared statements
- * - TCP keepalive and socket timeouts for reliable connections
+ * YugabyteSession manages connections to YugabyteDB using the YugabyteDB Smart Driver (YBClusterAwareDataSource) with
+ * HikariCP connection pooling.
+ *
+ * Performance Optimizations (Phase 1+2): - Connection pooling with HikariCP for better connection reuse - YugabyteDB
+ * Smart Driver with load balancing enabled - rewriteBatchedInserts=true for optimized batch INSERT performance -
+ * Configurable prepareThreshold for server-side prepared statements - TCP keepalive and socket timeouts for reliable
+ * connections
  */
 public class YugabyteSession {
     public Logger logger = LoggerFactory.getLogger(this.getClass().getName());
@@ -75,9 +73,8 @@ public class YugabyteSession {
     }
 
     /**
-     * Get a connection from the pool. Caller MUST close the connection after use
-     * to return it to the pool.
-     * 
+     * Get a connection from the pool. Caller MUST close the connection after use to return it to the pool.
+     *
      * For batch operations, use getDataSource() instead and manage connections directly.
      */
     public Connection getConnection() throws SQLException {
@@ -85,8 +82,8 @@ public class YugabyteSession {
     }
 
     /**
-     * Get the HikariCP data source for direct pool access.
-     * Use this for batch operations that need to manage connections themselves.
+     * Get the HikariCP data source for direct pool access. Use this for batch operations that need to manage
+     * connections themselves.
      */
     public HikariDataSource getDataSource() {
         return dataSource;
@@ -112,13 +109,11 @@ public class YugabyteSession {
 
     /**
      * Initialize the HikariCP connection pool with YugabyteDB Smart Driver.
-     * 
-     * Key Performance Properties:
-     * - rewriteBatchedInserts=true: Rewrites batch INSERTs into multi-row INSERT statements
-     *   This is CRITICAL for batch performance - can improve batch INSERT speed by 10-50x
-     * - load_balance=true: Enables cluster-aware load balancing across YugabyteDB nodes
-     * - prepareThreshold: Number of times a statement must be executed before using server-side prep
-     * - tcpKeepAlive=true: Maintains persistent connections
+     *
+     * Key Performance Properties: - rewriteBatchedInserts=true: Rewrites batch INSERTs into multi-row INSERT statements
+     * This is CRITICAL for batch performance - can improve batch INSERT speed by 10-50x - load_balance=true: Enables
+     * cluster-aware load balancing across YugabyteDB nodes - prepareThreshold: Number of times a statement must be
+     * executed before using server-side prep - tcpKeepAlive=true: Maintains persistent connections
      */
     private HikariDataSource initConnectionPool(IPropertyHelper propertyHelper) {
         try {
@@ -153,7 +148,7 @@ public class YugabyteSession {
             // Configure YBClusterAwareDataSource with HikariCP
             Properties poolProperties = new Properties();
             poolProperties.setProperty("dataSourceClassName", "com.yugabyte.ysql.YBClusterAwareDataSource");
-            
+
             // Basic connection properties
             poolProperties.setProperty("dataSource.serverName", host);
             poolProperties.setProperty("dataSource.portNumber", port);
@@ -164,18 +159,18 @@ public class YugabyteSession {
             // ========================================================================
             // CRITICAL PERFORMANCE PROPERTIES FOR YUGABYTEDB
             // ========================================================================
-            
+
             // 1. rewriteBatchedInserts - CRITICAL for batch INSERT performance!
             // When true, rewrites batch INSERTs like:
-            //   INSERT INTO t VALUES (1); INSERT INTO t VALUES (2); INSERT INTO t VALUES (3);
+            // INSERT INTO t VALUES (1); INSERT INTO t VALUES (2); INSERT INTO t VALUES (3);
             // Into:
-            //   INSERT INTO t VALUES (1), (2), (3);
+            // INSERT INTO t VALUES (1), (2), (3);
             // This reduces network round-trips dramatically (10-50x improvement)
             Boolean rewriteBatched = propertyHelper.getBoolean(KnownProperties.TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS);
-            poolProperties.setProperty("dataSource.rewriteBatchedInserts", 
-                (rewriteBatched != null && rewriteBatched) ? "true" : "true"); // Default to true
-            logger.info("  rewriteBatchedInserts: {} (CRITICAL for batch performance)", 
-                poolProperties.getProperty("dataSource.rewriteBatchedInserts"));
+            poolProperties.setProperty("dataSource.rewriteBatchedInserts",
+                    (rewriteBatched != null && rewriteBatched) ? "true" : "true"); // Default to true
+            logger.info("  rewriteBatchedInserts: {} (CRITICAL for batch performance)",
+                    poolProperties.getProperty("dataSource.rewriteBatchedInserts"));
 
             // 2. Load balancing - distribute connections across YugabyteDB nodes
             Boolean loadBalance = propertyHelper.getBoolean(KnownProperties.TARGET_YUGABYTE_LOAD_BALANCE);
@@ -187,27 +182,27 @@ public class YugabyteSession {
             // 3. prepareThreshold - use server-side prepared statements after N executions
             // Lower value = earlier use of server-side prep = better performance for repeated queries
             Number prepareThreshold = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_PREPARE_THRESHOLD);
-            poolProperties.setProperty("dataSource.prepareThreshold", 
-                (prepareThreshold != null) ? prepareThreshold.toString() : "5");
-            logger.info("  prepareThreshold: {} (server-side prepared statements)", 
-                poolProperties.getProperty("dataSource.prepareThreshold"));
+            poolProperties.setProperty("dataSource.prepareThreshold",
+                    (prepareThreshold != null) ? prepareThreshold.toString() : "5");
+            logger.info("  prepareThreshold: {} (server-side prepared statements)",
+                    poolProperties.getProperty("dataSource.prepareThreshold"));
 
             // 4. TCP KeepAlive - maintain persistent connections
             Boolean tcpKeepAlive = propertyHelper.getBoolean(KnownProperties.TARGET_YUGABYTE_TCP_KEEPALIVE);
-            poolProperties.setProperty("dataSource.tcpKeepAlive", 
-                (tcpKeepAlive != null && tcpKeepAlive) ? "true" : "true"); // Default to true
+            poolProperties.setProperty("dataSource.tcpKeepAlive",
+                    (tcpKeepAlive != null && tcpKeepAlive) ? "true" : "true"); // Default to true
             logger.info("  tcpKeepAlive: {}", poolProperties.getProperty("dataSource.tcpKeepAlive"));
 
             // 5. Socket timeout
             Number socketTimeout = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_SOCKET_TIMEOUT);
-            poolProperties.setProperty("dataSource.socketTimeout", 
-                (socketTimeout != null) ? socketTimeout.toString() : "60000");
+            poolProperties.setProperty("dataSource.socketTimeout",
+                    (socketTimeout != null) ? socketTimeout.toString() : "60000");
             logger.info("  socketTimeout: {}ms", poolProperties.getProperty("dataSource.socketTimeout"));
 
             // ========================================================================
             // ADDITIONAL ENDPOINTS AND TOPOLOGY (for distributed clusters)
             // ========================================================================
-            
+
             // Additional endpoints for load balancing
             String additionalEndpoints = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS);
             if (additionalEndpoints != null && !additionalEndpoints.trim().isEmpty()) {
@@ -225,11 +220,11 @@ public class YugabyteSession {
             // ========================================================================
             // SSL CONFIGURATION
             // ========================================================================
-            
+
             String sslEnabled = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSL_ENABLED);
             String sslMode = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLMODE);
             String sslRootCert = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLROOTCERT);
-            
+
             if (sslEnabled != null && "true".equalsIgnoreCase(sslEnabled)) {
                 poolProperties.setProperty("dataSource.ssl", "true");
                 if (sslMode != null && !sslMode.isEmpty()) {
@@ -250,22 +245,20 @@ public class YugabyteSession {
             // ========================================================================
             // HIKARICP POOL CONFIGURATION
             // ========================================================================
-            
+
             Number maxPoolSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_POOL_MAX_SIZE);
             Number minPoolSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_POOL_MIN_SIZE);
-            
+
             // Increased defaults for better parallelism
-            poolProperties.setProperty("maximumPoolSize", 
-                (maxPoolSize != null) ? maxPoolSize.toString() : "20");
-            poolProperties.setProperty("minimumIdle", 
-                (minPoolSize != null) ? minPoolSize.toString() : "5");
-            
+            poolProperties.setProperty("maximumPoolSize", (maxPoolSize != null) ? maxPoolSize.toString() : "20");
+            poolProperties.setProperty("minimumIdle", (minPoolSize != null) ? minPoolSize.toString() : "5");
+
             // Connection timeout settings - optimized for bulk loading
-            poolProperties.setProperty("connectionTimeout", "60000");  // 60 seconds
-            poolProperties.setProperty("idleTimeout", "300000");       // 5 minutes
-            poolProperties.setProperty("maxLifetime", "1800000");      // 30 minutes
+            poolProperties.setProperty("connectionTimeout", "60000"); // 60 seconds
+            poolProperties.setProperty("idleTimeout", "300000"); // 5 minutes
+            poolProperties.setProperty("maxLifetime", "1800000"); // 30 minutes
             poolProperties.setProperty("leakDetectionThreshold", "120000"); // 2 minutes (increased for batch ops)
-            
+
             // Pool name for monitoring
             poolProperties.setProperty("poolName", "CDM-YugabyteDB-HighPerf-Pool");
 
@@ -286,7 +279,7 @@ public class YugabyteSession {
 
             // Create HikariDataSource
             HikariDataSource ds = new HikariDataSource(config);
-            
+
             logger.info("=========================================================================");
             logger.info("Successfully created HikariDataSource with YBClusterAwareDataSource");
             logger.info("Connection pool ready for high-performance batch operations");

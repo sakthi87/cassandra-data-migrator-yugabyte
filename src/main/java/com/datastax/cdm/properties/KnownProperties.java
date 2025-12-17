@@ -62,13 +62,13 @@ public class KnownProperties {
     public static final String TARGET_YUGABYTE_SSL_ENABLED = "spark.cdm.connect.target.yugabyte.ssl.enabled";
     public static final String TARGET_YUGABYTE_SSLMODE = "spark.cdm.connect.target.yugabyte.sslmode";
     public static final String TARGET_YUGABYTE_SSLROOTCERT = "spark.cdm.connect.target.yugabyte.sslrootcert";
-    
+
     // YugabyteDB YSQL Connection Pooling configuration (HikariCP)
     public static final String TARGET_YUGABYTE_POOL_MAX_SIZE = "spark.cdm.connect.target.yugabyte.pool.maxSize";
     public static final String TARGET_YUGABYTE_POOL_MIN_SIZE = "spark.cdm.connect.target.yugabyte.pool.minSize";
     public static final String TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS = "spark.cdm.connect.target.yugabyte.additionalEndpoints";
     public static final String TARGET_YUGABYTE_TOPOLOGY_KEYS = "spark.cdm.connect.target.yugabyte.topologyKeys";
-    
+
     // YugabyteDB YSQL Performance Tuning (Phase 1+2 optimizations)
     public static final String TARGET_YUGABYTE_BATCH_SIZE = "spark.cdm.connect.target.yugabyte.batchSize";
     public static final String TARGET_YUGABYTE_LOAD_BALANCE = "spark.cdm.connect.target.yugabyte.loadBalance";
@@ -134,26 +134,26 @@ public class KnownProperties {
         types.put(TARGET_YUGABYTE_SSLMODE, PropertyType.STRING);
         defaults.put(TARGET_YUGABYTE_SSLMODE, "disable");
         types.put(TARGET_YUGABYTE_SSLROOTCERT, PropertyType.STRING);
-        
+
         // YugabyteDB YSQL Connection Pooling configuration
         types.put(TARGET_YUGABYTE_POOL_MAX_SIZE, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_POOL_MAX_SIZE, "20");  // Increased for better parallelism
+        defaults.put(TARGET_YUGABYTE_POOL_MAX_SIZE, "20"); // Increased for better parallelism
         types.put(TARGET_YUGABYTE_POOL_MIN_SIZE, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_POOL_MIN_SIZE, "5");   // Increased minimum idle
+        defaults.put(TARGET_YUGABYTE_POOL_MIN_SIZE, "5"); // Increased minimum idle
         types.put(TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS, PropertyType.STRING);
         types.put(TARGET_YUGABYTE_TOPOLOGY_KEYS, PropertyType.STRING);
-        
+
         // YugabyteDB YSQL Performance Tuning (Phase 1+2 optimizations)
         types.put(TARGET_YUGABYTE_BATCH_SIZE, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_BATCH_SIZE, "25");  // Optimal batch size for YugabyteDB
+        defaults.put(TARGET_YUGABYTE_BATCH_SIZE, "25"); // Optimal batch size for YugabyteDB
         types.put(TARGET_YUGABYTE_LOAD_BALANCE, PropertyType.BOOLEAN);
-        defaults.put(TARGET_YUGABYTE_LOAD_BALANCE, "true");  // Enable Smart Driver load balancing
+        defaults.put(TARGET_YUGABYTE_LOAD_BALANCE, "true"); // Enable Smart Driver load balancing
         types.put(TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS, PropertyType.BOOLEAN);
-        defaults.put(TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS, "true");  // Critical for batch performance!
+        defaults.put(TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS, "true"); // Critical for batch performance!
         types.put(TARGET_YUGABYTE_PREPARE_THRESHOLD, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_PREPARE_THRESHOLD, "5");  // Use server-side prepared statements after 5 uses
+        defaults.put(TARGET_YUGABYTE_PREPARE_THRESHOLD, "5"); // Use server-side prepared statements after 5 uses
         types.put(TARGET_YUGABYTE_SOCKET_TIMEOUT, PropertyType.NUMBER);
-        defaults.put(TARGET_YUGABYTE_SOCKET_TIMEOUT, "60000");  // 60 seconds
+        defaults.put(TARGET_YUGABYTE_SOCKET_TIMEOUT, "60000"); // 60 seconds
         types.put(TARGET_YUGABYTE_TCP_KEEPALIVE, PropertyType.BOOLEAN);
         defaults.put(TARGET_YUGABYTE_TCP_KEEPALIVE, "true");
 

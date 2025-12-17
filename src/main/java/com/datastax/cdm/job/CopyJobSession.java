@@ -51,7 +51,7 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
     public Logger logger = LoggerFactory.getLogger(this.getClass().getName());
     private TargetUpsertStatement targetUpsertStatement;
     private TargetSelectByPKStatement targetSelectByPKStatement;
-    
+
     // Phase 3: Non-blocking pipeline - track pending async writes
     private static final int MAX_PENDING_WRITES = 100; // Backpressure limit
     private final ConcurrentLinkedQueue<CompletableFuture<AsyncResultSet>> pendingWrites = new ConcurrentLinkedQueue<>();
@@ -107,7 +107,7 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
 
                     // Phase 3: Apply backpressure - wait if too many pending writes
                     waitForBackpressure();
-                    
+
                     // Phase 2: Rate limiting moved to batch level (removed per-operation)
                     batch = writeAsync(batch, writeResults, boundUpsert);
                     jobCounter.increment(JobCounter.CounterType.UNFLUSHED);
@@ -125,7 +125,7 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
 
             // Phase 3: Final flush - submit remaining batch async
             flushAsync(batch, writeResults);
-            
+
             // Phase 3: Wait for all pending writes to complete
             waitForAllPendingWrites();
             jobCounter.increment(JobCounter.CounterType.WRITE,
@@ -153,20 +153,18 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
     }
 
     /**
-     * Phase 1: Fixed blocking async - wait for all results in parallel instead of sequentially
-     * Phase 2: Rate limiting moved to batch level (here)
-     * Phase 3: Non-blocking - submit async and return immediately (NO blocking wait)
+     * Phase 1: Fixed blocking async - wait for all results in parallel instead of sequentially Phase 2: Rate limiting
+     * moved to batch level (here) Phase 3: Non-blocking - submit async and return immediately (NO blocking wait)
      */
     private void flushAsync(BatchStatement batch, Collection<CompletionStage<AsyncResultSet>> writeResults) {
         // Phase 1: Process any existing writeResults in parallel (if any)
         if (!writeResults.isEmpty()) {
-            CompletableFuture<?>[] futures = writeResults.stream()
-                .map(writeResult -> writeResult.toCompletableFuture())
-                .toArray(CompletableFuture[]::new);
-            
+            CompletableFuture<?>[] futures = writeResults.stream().map(writeResult -> writeResult.toCompletableFuture())
+                    .toArray(CompletableFuture[]::new);
+
             // Wait for all to complete in parallel (not sequentially)
             CompletableFuture.allOf(futures).join();
-            
+
             // Process results
             writeResults.stream().forEach(writeResult -> {
                 try {
@@ -177,17 +175,16 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
             });
             writeResults.clear();
         }
-        
+
         // Phase 2 & 3: Submit new batch async (non-blocking)
         if (batch.size() > 0) {
             // Phase 2: Batch-level rate limiting (instead of per-operation)
             int batchRecords = batch.size();
             rateLimiterTarget.acquire(batchRecords);
-            
+
             // Phase 3: Submit async and track in pending queue (non-blocking - NO wait)
-            CompletableFuture<AsyncResultSet> future = targetUpsertStatement.executeAsync(batch)
-                .toCompletableFuture();
-            
+            CompletableFuture<AsyncResultSet> future = targetUpsertStatement.executeAsync(batch).toCompletableFuture();
+
             // Add error handling callback
             future.whenComplete((result, throwable) -> {
                 pendingWriteCount.decrementAndGet();
@@ -201,12 +198,12 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
                     }
                 }
             });
-            
+
             pendingWrites.add(future);
             pendingWriteCount.incrementAndGet();
         }
     }
-    
+
     /**
      * Phase 3: Backpressure - wait if too many pending writes
      */
@@ -225,24 +222,22 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
             }
         }
     }
-    
+
     /**
      * Phase 3: Wait for all pending writes to complete
      */
     private void waitForAllPendingWrites() {
         // Clean up and wait for all pending writes
-        CompletableFuture<?>[] futures = pendingWrites.stream()
-            .filter(f -> !f.isDone())
-            .toArray(CompletableFuture[]::new);
-        
+        CompletableFuture<?>[] futures = pendingWrites.stream().filter(f -> !f.isDone())
+                .toArray(CompletableFuture[]::new);
+
         if (futures.length > 0) {
             CompletableFuture.allOf(futures).join();
         }
-        
+
         pendingWrites.clear();
         pendingWriteCount.set(0);
     }
-    
 
     private BoundStatement bind(Record r) {
         if (isCounterTable) {
@@ -263,11 +258,11 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
             if (batch.size() >= batchSize) {
                 // Phase 2: Batch-level rate limiting
                 rateLimiterTarget.acquire(batch.size());
-                
+
                 // Phase 3: Submit async and track (non-blocking)
                 CompletableFuture<AsyncResultSet> future = targetUpsertStatement.executeAsync(batch)
-                    .toCompletableFuture();
-                
+                        .toCompletableFuture();
+
                 // Add error handling callback
                 future.whenComplete((result, throwable) -> {
                     pendingWriteCount.decrementAndGet();
@@ -281,7 +276,7 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
                         }
                     }
                 });
-                
+
                 pendingWrites.add(future);
                 pendingWriteCount.incrementAndGet();
                 writeResults.add(future);
@@ -291,11 +286,11 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
         } else {
             // Phase 2: Per-operation rate limiting for single-record batches
             rateLimiterTarget.acquire(1);
-            
+
             // Phase 3: Submit async and track (non-blocking)
             CompletableFuture<AsyncResultSet> future = targetUpsertStatement.executeAsync(boundUpsert)
-                .toCompletableFuture();
-            
+                    .toCompletableFuture();
+
             future.whenComplete((result, throwable) -> {
                 pendingWriteCount.decrementAndGet();
                 if (throwable != null) {
@@ -308,7 +303,7 @@ public class CopyJobSession extends AbstractJobSession<PartitionRange> {
                     }
                 }
             });
-            
+
             pendingWrites.add(future);
             pendingWriteCount.incrementAndGet();
             writeResults.add(future);

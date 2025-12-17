@@ -34,16 +34,14 @@ import com.zaxxer.hikari.HikariDataSource;
 
 /**
  * High-performance YugabyteDB upsert statement with PreparedStatement reuse and JDBC batching.
- * 
- * Phase 1 Optimization: PreparedStatement Reuse
- * - PreparedStatement is created ONCE and reused for all records
- * - Eliminates query parsing overhead for each record (3-5x improvement)
- * 
- * Phase 2 Optimization: JDBC Batching
- * - Records are added to batch with addBatch()
- * - Batch is executed with executeBatch() when size threshold is reached
- * - Combined with rewriteBatchedInserts=true, this gives 5-10x improvement
- * 
+ *
+ * Phase 1 Optimization: PreparedStatement Reuse - PreparedStatement is created ONCE and reused for all records -
+ * Eliminates query parsing overhead for each record (3-5x improvement)
+ *
+ * Phase 2 Optimization: JDBC Batching - Records are added to batch with addBatch() - Batch is executed with
+ * executeBatch() when size threshold is reached - Combined with rewriteBatchedInserts=true, this gives 5-10x
+ * improvement
+ *
  * Expected total improvement: 10-50x faster than original implementation
  */
 public class YugabyteUpsertStatement {
@@ -56,11 +54,11 @@ public class YugabyteUpsertStatement {
     private final String upsertSQL;
     private final List<String> columnNames;
     private final List<Class<?>> bindClasses;
-    
+
     // Phase 1: Reusable PreparedStatement (created once, reused for all records)
     private PreparedStatement reusableStatement;
     private Connection batchConnection;
-    
+
     // Phase 2: Batch processing
     private final int batchSize;
     private int currentBatchCount = 0;
@@ -80,10 +78,10 @@ public class YugabyteUpsertStatement {
         this.batchSize = (configuredBatchSize != null) ? configuredBatchSize.intValue() : 25;
 
         this.upsertSQL = buildUpsertStatement();
-        
+
         // Phase 1: Initialize reusable PreparedStatement
         initializeReusablePreparedStatement();
-        
+
         logger.info("=========================================================================");
         logger.info("YugabyteUpsertStatement initialized with HIGH-PERFORMANCE settings:");
         logger.info("  PreparedStatement Reuse: ENABLED (Phase 1)");
@@ -140,23 +138,23 @@ public class YugabyteUpsertStatement {
     }
 
     /**
-     * Phase 1: Initialize the reusable PreparedStatement.
-     * This is created ONCE and reused for all records, eliminating query parsing overhead.
+     * Phase 1: Initialize the reusable PreparedStatement. This is created ONCE and reused for all records, eliminating
+     * query parsing overhead.
      */
     private void initializeReusablePreparedStatement() {
         try {
             // Get a dedicated connection from the pool for batch operations
             HikariDataSource dataSource = session.getDataSource();
             this.batchConnection = dataSource.getConnection();
-            
+
             // Disable auto-commit for better batch performance
             this.batchConnection.setAutoCommit(false);
-            
+
             // Create the reusable PreparedStatement
             this.reusableStatement = batchConnection.prepareStatement(upsertSQL);
-            
+
             logger.debug("Initialized reusable PreparedStatement for batch operations");
-            
+
         } catch (SQLException e) {
             logger.error("Failed to initialize reusable PreparedStatement", e);
             throw new RuntimeException("Failed to initialize reusable PreparedStatement", e);
@@ -164,12 +162,15 @@ public class YugabyteUpsertStatement {
     }
 
     /**
-     * Phase 2: Add a record to the batch.
-     * Records are accumulated until batch size is reached, then executed together.
-     * 
-     * @param record The record to add to the batch
+     * Phase 2: Add a record to the batch. Records are accumulated until batch size is reached, then executed together.
+     *
+     * @param record
+     *            The record to add to the batch
+     *
      * @return true if batch was flushed (reached batch size), false otherwise
-     * @throws SQLException if there's a database error
+     *
+     * @throws SQLException
+     *             if there's a database error
      */
     public boolean addToBatch(Record record) throws SQLException {
         if (record == null) {
@@ -214,9 +215,11 @@ public class YugabyteUpsertStatement {
 
     /**
      * Execute all pending batched records.
-     * 
+     *
      * @return Array of update counts from executeBatch()
-     * @throws SQLException if there's a database error
+     *
+     * @throws SQLException
+     *             if there's a database error
      */
     public int[] flush() throws SQLException {
         if (currentBatchCount == 0) {
@@ -226,24 +229,24 @@ public class YugabyteUpsertStatement {
         try {
             // Execute all batched statements at once
             int[] results = reusableStatement.executeBatch();
-            
+
             // Commit the transaction
             batchConnection.commit();
-            
+
             // Update statistics
             totalRecordsWritten += currentBatchCount;
             totalBatchesExecuted++;
-            
+
             if (logger.isDebugEnabled()) {
-                logger.debug("Flushed batch: {} records (total: {} records, {} batches)", 
-                    currentBatchCount, totalRecordsWritten, totalBatchesExecuted);
+                logger.debug("Flushed batch: {} records (total: {} records, {} batches)", currentBatchCount,
+                        totalRecordsWritten, totalBatchesExecuted);
             }
-            
+
             // Reset batch counter
             currentBatchCount = 0;
-            
+
             return results;
-            
+
         } catch (SQLException e) {
             // Rollback on error
             try {
@@ -251,7 +254,7 @@ public class YugabyteUpsertStatement {
             } catch (SQLException rollbackEx) {
                 logger.error("Error during rollback", rollbackEx);
             }
-            
+
             logger.error("Error executing batch (batch size: {})", currentBatchCount, e);
             currentBatchCount = 0; // Reset counter even on error
             throw e;
@@ -259,13 +262,15 @@ public class YugabyteUpsertStatement {
     }
 
     /**
-     * Legacy method for backward compatibility.
-     * Executes a single record immediately (not batched).
-     * 
+     * Legacy method for backward compatibility. Executes a single record immediately (not batched).
+     *
      * Note: For better performance, use addToBatch() + flush() instead.
-     * 
-     * @param record The record to execute
-     * @throws SQLException if there's a database error
+     *
+     * @param record
+     *            The record to execute
+     *
+     * @throws SQLException
+     *             if there's a database error
      */
     public void execute(Record record) throws SQLException {
         addToBatch(record);
@@ -354,7 +359,7 @@ public class YugabyteUpsertStatement {
             }
         }
 
-        logger.info("YugabyteUpsertStatement closed. Total records written: {}, Total batches: {}", 
-            totalRecordsWritten, totalBatchesExecuted);
+        logger.info("YugabyteUpsertStatement closed. Total records written: {}, Total batches: {}", totalRecordsWritten,
+                totalBatchesExecuted);
     }
 }
