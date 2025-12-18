@@ -217,6 +217,14 @@ public class YugabyteSession {
             urlParams.add("socketTimeout=" + socketTimeoutValue);
             logger.info("  socketTimeout: {}ms", socketTimeoutValue);
 
+            // 6. Current Schema - set default schema for the connection
+            String schema = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SCHEMA);
+            if (schema != null && !schema.trim().isEmpty()) {
+                // Use currentSchema parameter (PostgreSQL/YugabyteDB JDBC driver supports this)
+                urlParams.add("currentSchema=" + schema.trim());
+                logger.info("  currentSchema: {} (default schema for connection)", schema.trim());
+            }
+
             // ========================================================================
             // ADDITIONAL ENDPOINTS AND TOPOLOGY (for distributed clusters)
             // ========================================================================

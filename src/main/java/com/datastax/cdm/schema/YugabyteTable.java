@@ -58,12 +58,14 @@ public class YugabyteTable extends BaseTable {
         try {
             DatabaseMetaData metaData = connection.getMetaData();
             String[] tableParts = getKeyspaceTable().split("\\.");
+            String databaseName = connection.getCatalog(); // Get database name from connection
 
             // Determine schema and table name
             // Format options:
             // 1. "table" -> use configured/default schema
-            // 2. "schema.table" -> use specified schema
-            // 3. "database.schema.table" -> use specified schema (database is in connection URL)
+            // 2. "schema.table" -> use specified schema (if first part doesn't match database name)
+            // 3. "database.table" -> use configured schema (if first part matches database name)
+            // 4. "database.schema.table" -> use specified schema (database is in connection URL)
             String schema;
             String tableName;
 
@@ -72,9 +74,20 @@ public class YugabyteTable extends BaseTable {
                 schema = determineSchemaName();
                 tableName = tableParts[0];
             } else if (tableParts.length == 2) {
-                // Schema.table format: "schema.table"
-                schema = tableParts[0];
-                tableName = tableParts[1];
+                // Could be "schema.table" or "database.table"
+                // If first part matches database name, treat as "database.table" and use configured schema
+                // Otherwise, treat as "schema.table"
+                if (databaseName != null && tableParts[0].equalsIgnoreCase(databaseName)) {
+                    // This is "database.table" format - use configured schema
+                    schema = determineSchemaName();
+                    tableName = tableParts[1];
+                    logger.debug("Detected database.table format: {}. Using configured schema: {}", getKeyspaceTable(),
+                            schema);
+                } else {
+                    // This is "schema.table" format
+                    schema = tableParts[0];
+                    tableName = tableParts[1];
+                }
             } else if (tableParts.length == 3) {
                 // Database.schema.table format: "database.schema.table"
                 // Note: database is already in connection URL, so we use schema.table
@@ -88,9 +101,16 @@ public class YugabyteTable extends BaseTable {
                         schema, tableName);
             }
 
-            this.schemaName = schema;
+            // Ensure schema is never null or empty
+            if (schema == null || schema.trim().isEmpty()) {
+                schema = determineSchemaName(); // Try again, should default to "public"
+                if (schema == null || schema.trim().isEmpty()) {
+                    schema = "public"; // Final fallback
+                }
+            }
+            this.schemaName = schema.trim();
 
-            logger.info("Discovering schema for table: {}.{} (database: {})", schema, tableName,
+            logger.info("Discovering schema for table: {}.{} (database: {})", this.schemaName, tableName,
                     connection.getCatalog());
 
             // Try to get column information with the determined schema

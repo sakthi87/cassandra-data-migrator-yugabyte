@@ -162,6 +162,7 @@ spark.cdm.connect.target.yugabyte.password=yugabyte
 # Schema Configuration (Optional)
 # Default: "public" (PostgreSQL default schema)
 # Use this if your tables are in a custom schema
+# This sets the currentSchema parameter in JDBC connection URL
 spark.cdm.connect.target.yugabyte.schema=public
 
 # Performance Settings
@@ -200,18 +201,29 @@ You can also specify the schema in the `keyspaceTable` property:
 **Auto-Detection:**
 If the table is not found in the specified/default schema, CDM will automatically search for the table across all schemas in the database.
 
-**Example:**
+**Recommended Configuration (Simplified):**
+```properties
+# Database and schema are defined separately
+spark.cdm.connect.target.yugabyte.database=transaction_datastore
+spark.cdm.connect.target.yugabyte.schema=transactions
+
+# Table name only (database and schema are already defined above)
+spark.cdm.schema.target.keyspaceTable=my_table
+```
+
+**Alternative Configuration:**
 ```properties
 # Table is in "finance" schema instead of "public"
 spark.cdm.connect.target.yugabyte.schema=finance
+# Can still use full format if preferred
 spark.cdm.schema.target.keyspaceTable=transaction_datastore.my_table
 ```
 
-**Auto-Detection Behavior:**
-- If the table is not found in the specified/default schema, CDM automatically searches for it across all schemas
-- This is especially useful when the `keyspaceTable` format (`database.table`) might be misinterpreted
-- The detected schema is logged for visibility
-- Tested and verified with 100k+ records
+**Key Features:**
+- **Simplified Configuration**: For YugabyteDB target, you can use just the table name in `keyspaceTable` since database and schema are defined separately
+- **JDBC currentSchema**: The configured schema is automatically added to the JDBC connection URL as `currentSchema` parameter
+- **Auto-Detection**: If the table is not found in the specified/default schema, CDM automatically searches for it across all schemas
+- **Tested and Verified**: Successfully tested with 100k+ records in custom `transactions` schema
 
 **Example Log Output:**
 ```
