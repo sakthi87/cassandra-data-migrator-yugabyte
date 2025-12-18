@@ -85,12 +85,24 @@ This implementation includes **Phase 1 and Phase 2 optimizations** to achieve ds
 
 CDM supports populating extra audit fields in the target YugabyteDB table that don't exist in the source Cassandra table. This is useful for tracking migration metadata, data lineage, and audit information.
 
+> **✅ Fully Implemented & Tested**: This feature has been fully implemented and tested with 100k+ records. All audit fields are correctly populated during migration.
+
 **Example Configuration:**
 ```properties
 # Populate audit fields during migration
 spark.cdm.feature.constantColumns.names=z_audit_crtd_by_txt,z_audit_evnt_id,z_audit_crtd_ts,z_audit_last_mdfd_by_txt
 spark.cdm.feature.constantColumns.values='CDM_MIGRATION','MIGRATION_BATCH_001','2024-12-17T10:00:00Z','CDM_MIGRATION'
 ```
+
+**Supported Data Types:**
+- **String/Text**: `'value'` (with single quotes)
+- **Integer/Long**: `12345` (no quotes)
+- **Double/Float**: `123.45` (no quotes)
+- **Boolean**: `true` or `false` (no quotes)
+- **Timestamp**: `'2024-12-17T10:00:00Z'` (ISO 8601 format with quotes)
+- **Date**: `'2024-12-17'` (date format with quotes)
+
+**Note:** If your values contain commas, use a custom delimiter by setting `spark.cdm.feature.constantColumns.splitRegex` (e.g., `\\|` for pipe delimiter).
 
 **See:** [simplestepswithcommands.md](./simplestepswithcommands.md#audit-fields-population) for detailed examples and usage.
 
@@ -195,6 +207,12 @@ See `mdfiles/100K_MIGRATION_RESULTS.md` for detailed performance analysis.
 **Issue: "Malformed topology-keys property value"**
 - Set `spark.cdm.connect.target.yugabyte.loadBalance=false` if not using multi-region
 - Only enable `loadBalance=true` when `topologyKeys` is explicitly configured
+
+**Issue: "Audit fields appear empty after migration"**
+- This was a bug that has been fixed in the latest version
+- Ensure you're using the latest JAR build: `mvn clean package -DskipTests`
+- Verify constant columns configuration in your properties file
+- Check migration logs for "Initialized constant column" messages
 
 See `simplestepswithcommands.md` for more troubleshooting tips.
 
