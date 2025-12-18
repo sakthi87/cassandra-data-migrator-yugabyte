@@ -39,6 +39,14 @@ spark.cdm.connect.target.yugabyte.password=yugabyte
 # Table Configuration
 spark.cdm.schema.origin.keyspaceTable=transaction_datastore.dda_pstd_fincl_txn_cnsmr_by_accntnbr
 spark.cdm.schema.target.keyspaceTable=transaction_datastore.dda_pstd_fincl_txn_cnsmr_by_accntnbr
+
+# =============================================================================
+# OPTIONAL: Audit Fields Population (Constant Columns Feature)
+# =============================================================================
+# If your target table has extra audit fields that don't exist in source,
+# you can populate them with constant values during migration
+# spark.cdm.feature.constantColumns.names=z_audit_crtd_by_txt,z_audit_evnt_id,z_audit_crtd_ts,z_audit_last_mdfd_by_txt
+# spark.cdm.feature.constantColumns.values='CDM_MIGRATION','MIGRATION_BATCH_001','2024-12-17T10:00:00Z','CDM_MIGRATION'
 ```
 
 ## Step 3: Run Migration
@@ -107,6 +115,85 @@ ps aux | grep spark-submit
 # Background
 ./run_migration.sh background migration.log
 ```
+
+## Step 3.5: Audit Fields Population (Optional)
+
+If your target YugabyteDB table has extra audit fields that don't exist in the source Cassandra table, you can automatically populate them during migration using CDM's **Constant Columns** feature.
+
+### Example: Populating Audit Fields
+
+**Scenario:** Your target table has audit fields:
+- `z_audit_crtd_by_txt` (TEXT) - Who created the record
+- `z_audit_evnt_id` (TEXT) - Migration event ID
+- `z_audit_crtd_ts` (TIMESTAMP) - When the record was created
+- `z_audit_last_mdfd_by_txt` (TEXT) - Who last modified the record
+
+**Configuration in `transaction-test.properties`:**
+```properties
+# Constant Columns Feature - Audit Fields
+spark.cdm.feature.constantColumns.names=z_audit_crtd_by_txt,z_audit_evnt_id,z_audit_crtd_ts,z_audit_last_mdfd_by_txt
+spark.cdm.feature.constantColumns.values='CDM_MIGRATION','MIGRATION_BATCH_001','2024-12-17T10:00:00Z','CDM_MIGRATION'
+```
+
+**What happens:**
+- Every migrated record will have these audit fields populated with the specified constant values
+- The values are the same for all records in the migration batch
+- Useful for tracking migration metadata, data lineage, and audit trails
+
+### Complete Example Properties File
+
+See `transaction-test-audit.properties` for a complete example with audit fields enabled:
+
+```properties
+# ... connection settings ...
+
+# Constant Columns Feature - Audit Fields
+spark.cdm.feature.constantColumns.names=z_audit_crtd_by_txt,z_audit_evnt_id,z_audit_crtd_ts,z_audit_last_mdfd_by_txt
+spark.cdm.feature.constantColumns.values='CDM_MIGRATION','MIGRATION_BATCH_001','2024-12-17T10:00:00Z','CDM_MIGRATION'
+```
+
+### Value Format Guidelines
+
+- **Text/String values**: Use single quotes: `'CDM_MIGRATION'`
+- **Numeric values**: No quotes: `12345`, `1702732800000`
+- **Boolean values**: No quotes: `true`, `false`
+- **Timestamp values**: ISO 8601 format with quotes: `'2024-12-17T10:00:00Z'`
+- **Date values**: Date format with quotes: `'2024-12-17'`
+
+### Verifying Audit Fields
+
+After migration, verify the audit fields were populated:
+
+```bash
+docker exec -i yugabyte bash -c '/home/yugabyte/bin/ysqlsh --host $(hostname) -U yugabyte -d transaction_datastore -c "SELECT cmpny_id, accnt_nbr, z_audit_crtd_by_txt, z_audit_evnt_id, z_audit_crtd_ts FROM dda_pstd_fincl_txn_cnsmr_by_accntnbr LIMIT 5;"'
+```
+
+### Common Use Cases
+
+| Use Case | Example Configuration |
+|----------|----------------------|
+| **Migration Tracking** | `created_by='CDM_MIGRATION'`, `migration_batch='BATCH_001'` |
+| **Data Lineage** | `source_system='CASSANDRA_PROD'`, `migration_date='2024-12-17'` |
+| **Version Control** | `data_version=1`, `schema_version='v2.0'` |
+| **Audit Trail** | `migrated_at='2024-12-17T10:00:00Z'`, `migrated_by='system'` |
+
+### Troubleshooting Audit Fields
+
+**Issue: "Constant column X is not found on the target table"**
+- Verify the column exists in the target YugabyteDB table
+- Check for typos in column names
+- Ensure column names match exactly (case-sensitive)
+
+**Issue: "Constant column names and values are of different sizes"**
+- Count items in `.names` and `.values` - they must match
+- Check the delimiter is correctly splitting values
+
+**Issue: "Constant column value cannot be parsed as type X"**
+- Use correct CQLSH syntax for the data type
+- Check quotes for string types
+- Verify timestamp/date formats
+
+For more details, see the [Audit Fields Guide](./mdfiles/AUDIT_FIELDS_GUIDE.md).
 
 ## Step 4: Monitor Progress
 

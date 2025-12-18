@@ -7,11 +7,15 @@
 
 Migrate and Validate Tables between Origin and Target Cassandra Clusters.
 
+> **Note:** This codebase is based on the DataStax Cassandra Data Migrator for migration from Cassandra to Cassandra support. This fork adds enhanced features for **YugabyteDB as target** to enable high-performance data migration from Cassandra to YugabyteDB.
+
 ## YugabyteDB Migration Support
 
-This fork includes enhanced support for migrating data to **YugabyteDB**:
+This fork includes enhanced support for migrating data to **YugabyteDB** with performance optimizations:
 - **YSQL (PostgreSQL)** migration using YugabyteDB Smart Driver with HikariCP connection pooling
 - **YCQL (Cassandra)** migration using standard Cassandra drivers
+- **High-Performance Optimizations**: PreparedStatement reuse, JDBC batching, connection pooling
+- **Audit Fields Population**: Automatic population of extra audit fields in target table using Constant Columns feature
 
 ### Quick Start for YugabyteDB Migration
 
@@ -49,11 +53,150 @@ This fork includes enhanced support for migrating data to **YugabyteDB**:
 ### YugabyteDB Smart Driver Features
 
 - **Connection Pooling**: HikariCP with configurable pool size
-- **Load Balancing**: Cluster-aware load balancing via YBClusterAwareDataSource
+- **Load Balancing**: Cluster-aware load balancing (requires topologyKeys configuration)
 - **Topology Awareness**: Geo-location aware routing
 - **SSL Support**: Configurable SSL/TLS connections
+- **Performance Optimizations**: 
+  - `rewriteBatchedInserts`: Converts batch INSERTs into multi-row INSERTs for better performance
+  - `prepareThreshold`: Server-side prepared statement caching
+  - `tcpKeepAlive`: Maintains persistent connections
 
-See `migration.properties.template` for all configuration options.
+### Performance Improvements
+
+This implementation includes **Phase 1 and Phase 2 optimizations** to achieve dsbulk-level performance:
+
+#### Phase 1: PreparedStatement Reuse
+- PreparedStatement is created once and reused for all records
+- Eliminates query parsing overhead per record
+- Reduces CPU usage significantly
+
+#### Phase 2: JDBC Batching
+- Records are batched together before execution
+- Uses `rewriteBatchedInserts` to convert batches into multi-row INSERTs
+- Achieves ~20,000-25,000 IOPS (with batching) for large datasets
+- Throughput: ~900-1000 records/second
+
+#### Connection Pool Management
+- HikariCP connection pooling with configurable pool size
+- Each Spark partition gets its own connection pool
+- Automatic connection lifecycle management
+
+### Audit Fields Population (Constant Columns)
+
+CDM supports populating extra audit fields in the target YugabyteDB table that don't exist in the source Cassandra table. This is useful for tracking migration metadata, data lineage, and audit information.
+
+**Example Configuration:**
+```properties
+# Populate audit fields during migration
+spark.cdm.feature.constantColumns.names=z_audit_crtd_by_txt,z_audit_evnt_id,z_audit_crtd_ts,z_audit_last_mdfd_by_txt
+spark.cdm.feature.constantColumns.values='CDM_MIGRATION','MIGRATION_BATCH_001','2024-12-17T10:00:00Z','CDM_MIGRATION'
+```
+
+**See:** [simplestepswithcommands.md](./simplestepswithcommands.md#audit-fields-population) for detailed examples and usage.
+
+### Quick Migration Example
+
+**For YSQL migration with audit fields:**
+```bash
+SPARK_HOME=$(brew --prefix apache-spark)
+$SPARK_HOME/bin/spark-submit \
+  --properties-file transaction-test.properties \
+  --conf spark.cdm.schema.origin.keyspaceTable="transaction_datastore.dda_pstd_fincl_txn_cnsmr_by_accntnbr" \
+  --master "local[*]" \
+  --driver-memory 4G \
+  --executor-memory 4G \
+  --class com.datastax.cdm.job.YugabyteMigrate \
+  target/cassandra-data-migrator-5.5.2-SNAPSHOT.jar
+```
+
+**For background execution:**
+```bash
+SPARK_HOME=$(brew --prefix apache-spark)
+nohup $SPARK_HOME/bin/spark-submit \
+  --properties-file transaction-test.properties \
+  --conf spark.cdm.schema.origin.keyspaceTable="transaction_datastore.dda_pstd_fincl_txn_cnsmr_by_accntnbr" \
+  --master "local[*]" \
+  --driver-memory 4G \
+  --executor-memory 4G \
+  --class com.datastax.cdm.job.YugabyteMigrate \
+  target/cassandra-data-migrator-5.5.2-SNAPSHOT.jar \
+  > migration.log 2>&1 &
+```
+
+**See:** [simplestepswithcommands.md](./simplestepswithcommands.md) for complete step-by-step guide.
+
+### Implementation Strategy
+
+The YugabyteDB implementation follows these key principles:
+
+1. **Schema Discovery**: Automatically discovers YugabyteDB table schema using JDBC `DatabaseMetaData`
+2. **SQL Generation**: Generates PostgreSQL-compatible `INSERT ... ON CONFLICT ... DO UPDATE SET` statements
+3. **Connection Management**: Uses HikariCP for efficient connection pooling with YugabyteDB Smart Driver
+4. **Batching**: Implements JDBC batching with `rewriteBatchedInserts` for optimal performance
+5. **Classloader Handling**: Explicitly loads YugabyteDB JDBC driver to work with Spark's classloader isolation
+
+### Configuration Properties
+
+Key properties for YugabyteDB migration:
+
+```properties
+# YugabyteDB Connection
+spark.cdm.connect.target.yugabyte.host=localhost
+spark.cdm.connect.target.yugabyte.port=5433
+spark.cdm.connect.target.yugabyte.database=your_database
+spark.cdm.connect.target.yugabyte.username=yugabyte
+spark.cdm.connect.target.yugabyte.password=yugabyte
+
+# Performance Settings
+spark.cdm.connect.target.yugabyte.batchSize=25
+spark.cdm.connect.target.yugabyte.rewriteBatchedInserts=true
+spark.cdm.connect.target.yugabyte.prepareThreshold=5
+spark.cdm.connect.target.yugabyte.tcpKeepAlive=true
+spark.cdm.connect.target.yugabyte.socketTimeout=60000
+
+# Connection Pool
+spark.cdm.connect.target.yugabyte.pool.maxSize=5
+spark.cdm.connect.target.yugabyte.pool.minSize=2
+
+# Load Balancing (requires topologyKeys for multi-region)
+spark.cdm.connect.target.yugabyte.loadBalance=false
+# spark.cdm.connect.target.yugabyte.topologyKeys=cloud1.region1.zone1,cloud1.region1.zone2
+```
+
+See `transaction-test.properties` for a complete example configuration.
+
+### Performance Results
+
+**Tested Configuration:**
+- **Records**: 100,000
+- **Partitions**: 20
+- **Batch Size**: 25
+- **Connection Pool**: 5 connections per partition
+
+**Results:**
+- **Throughput**: ~900-1000 records/second
+- **IOPS**: ~22,925 (with batching)
+- **Success Rate**: 100% (zero errors)
+- **Migration Time**: ~100 seconds for 100k records
+
+See `mdfiles/100K_MIGRATION_RESULTS.md` for detailed performance analysis.
+
+### Troubleshooting
+
+**Issue: "No suitable driver"**
+- Ensure JAR is rebuilt: `mvn clean package -DskipTests`
+- The implementation explicitly loads the YugabyteDB JDBC driver to handle Spark classloader issues
+
+**Issue: "Too many clients"**
+- Reduce `spark.cdm.connect.target.yugabyte.pool.maxSize`
+- Reduce `spark.cdm.perfops.numParts`
+- Formula: `numParts × pool.maxSize` should be less than YugabyteDB's max connections
+
+**Issue: "Malformed topology-keys property value"**
+- Set `spark.cdm.connect.target.yugabyte.loadBalance=false` if not using multi-region
+- Only enable `loadBalance=true` when `topologyKeys` is explicitly configured
+
+See `simplestepswithcommands.md` for more troubleshooting tips.
 
 > [!IMPORTANT]
 > Please note this job has been tested with spark version [3.5.6](https://archive.apache.org/dist/spark/spark-3.5.6/)
