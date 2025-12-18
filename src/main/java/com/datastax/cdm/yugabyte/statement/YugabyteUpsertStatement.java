@@ -93,7 +93,10 @@ public class YugabyteUpsertStatement {
 
     private String buildUpsertStatement() {
         StringBuilder sql = new StringBuilder();
-        sql.append("INSERT INTO ").append(yugabyteTable.getKeyspaceTable()).append(" (");
+        // In YugabyteDB, use schema.table format (public.table_name)
+        // The database is already set in the connection URL
+        String tableName = "public." + yugabyteTable.getTableName();
+        sql.append("INSERT INTO ").append(tableName).append(" (");
 
         // Add column names
         for (int i = 0; i < columnNames.size(); i++) {

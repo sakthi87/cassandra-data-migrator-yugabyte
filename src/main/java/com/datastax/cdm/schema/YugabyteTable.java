@@ -57,10 +57,14 @@ public class YugabyteTable extends BaseTable {
         try {
             DatabaseMetaData metaData = connection.getMetaData();
             String[] tableParts = getKeyspaceTable().split("\\.");
-            String schema = tableParts.length > 1 ? tableParts[0] : "public";
-            String tableName = tableParts.length > 1 ? tableParts[1] : tableParts[0];
+            // In YugabyteDB, the database name is in the connection URL, not the schema
+            // The schema is always "public" by default (PostgreSQL convention)
+            // So we extract just the table name from keyspaceTable (which may be "db.table" or just "table")
+            String schema = "public"; // YugabyteDB uses PostgreSQL schema convention
+            String tableName = tableParts.length > 1 ? tableParts[tableParts.length - 1] : tableParts[0];
 
-            logger.info("Discovering schema for table: {}.{}", schema, tableName);
+            logger.info("Discovering schema for table: {}.{} (database: {})", schema, tableName,
+                    tableParts.length > 1 ? tableParts[0] : "current");
 
             // Get column information
             try (ResultSet columns = metaData.getColumns(null, schema, tableName, null)) {

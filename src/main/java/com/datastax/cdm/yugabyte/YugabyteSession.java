@@ -16,8 +16,14 @@
 package com.datastax.cdm.yugabyte;
 
 import java.sql.Connection;
+import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
+
+import javax.sql.DataSource;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +35,7 @@ import com.datastax.cdm.schema.YugabyteTable;
 import com.datastax.cdm.yugabyte.statement.YugabyteUpsertStatement;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.util.DriverDataSource;
 
 /**
  * YugabyteSession manages connections to YugabyteDB using the YugabyteDB Smart Driver (YBClusterAwareDataSource) with
@@ -145,16 +152,19 @@ public class YugabyteSession {
             logger.info("  Database: {}", database);
             logger.info("  Username: {}", username);
 
-            // Configure YBClusterAwareDataSource with HikariCP
+            // Configure YugabyteDB connection with HikariCP
+            // Use JDBC URL approach for better compatibility (works with both Smart Driver and standard driver)
             Properties poolProperties = new Properties();
-            poolProperties.setProperty("dataSourceClassName", "com.yugabyte.ysql.YBClusterAwareDataSource");
 
-            // Basic connection properties
-            poolProperties.setProperty("dataSource.serverName", host);
-            poolProperties.setProperty("dataSource.portNumber", port);
-            poolProperties.setProperty("dataSource.databaseName", database);
-            poolProperties.setProperty("dataSource.user", username);
-            poolProperties.setProperty("dataSource.password", password);
+            // Build JDBC URL for YugabyteDB
+            // Format: jdbc:yugabytedb://host:port/database?param1=value1&param2=value2
+            StringBuilder jdbcUrl = new StringBuilder();
+            jdbcUrl.append("jdbc:yugabytedb://").append(host).append(":").append(port).append("/").append(database);
+
+            // Add connection parameters as URL parameters
+            List<String> urlParams = new ArrayList<>();
+            urlParams.add("user=" + username);
+            urlParams.add("password=" + password);
 
             // ========================================================================
             // CRITICAL PERFORMANCE PROPERTIES FOR YUGABYTEDB
@@ -167,37 +177,45 @@ public class YugabyteSession {
             // INSERT INTO t VALUES (1), (2), (3);
             // This reduces network round-trips dramatically (10-50x improvement)
             Boolean rewriteBatched = propertyHelper.getBoolean(KnownProperties.TARGET_YUGABYTE_REWRITE_BATCHED_INSERTS);
-            poolProperties.setProperty("dataSource.rewriteBatchedInserts",
-                    (rewriteBatched != null && rewriteBatched) ? "true" : "true"); // Default to true
+            if (rewriteBatched == null || rewriteBatched) {
+                urlParams.add("rewriteBatchedInserts=true");
+            }
             logger.info("  rewriteBatchedInserts: {} (CRITICAL for batch performance)",
-                    poolProperties.getProperty("dataSource.rewriteBatchedInserts"));
+                    (rewriteBatched == null || rewriteBatched) ? "true" : "false");
 
             // 2. Load balancing - distribute connections across YugabyteDB nodes
+            // Only enable if topologyKeys are provided (required by Smart Driver)
+            String topologyKeys = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_TOPOLOGY_KEYS);
             Boolean loadBalance = propertyHelper.getBoolean(KnownProperties.TARGET_YUGABYTE_LOAD_BALANCE);
-            if (loadBalance != null && loadBalance) {
-                poolProperties.setProperty("dataSource.loadBalance", "true");
+            if (loadBalance != null && loadBalance && topologyKeys != null && !topologyKeys.trim().isEmpty()) {
+                urlParams.add("loadBalance=true");
+                urlParams.add("topologyKeys=" + topologyKeys);
                 logger.info("  loadBalance: true (Smart Driver load balancing enabled)");
+                logger.info("  Topology Keys: {}", topologyKeys);
+            } else if (loadBalance != null && loadBalance) {
+                logger.warn(
+                        "  loadBalance requested but topologyKeys not provided - disabling loadBalance for local/single-node setup");
             }
 
             // 3. prepareThreshold - use server-side prepared statements after N executions
             // Lower value = earlier use of server-side prep = better performance for repeated queries
             Number prepareThreshold = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_PREPARE_THRESHOLD);
-            poolProperties.setProperty("dataSource.prepareThreshold",
-                    (prepareThreshold != null) ? prepareThreshold.toString() : "5");
-            logger.info("  prepareThreshold: {} (server-side prepared statements)",
-                    poolProperties.getProperty("dataSource.prepareThreshold"));
+            String prepThresholdValue = (prepareThreshold != null) ? prepareThreshold.toString() : "5";
+            urlParams.add("prepareThreshold=" + prepThresholdValue);
+            logger.info("  prepareThreshold: {} (server-side prepared statements)", prepThresholdValue);
 
             // 4. TCP KeepAlive - maintain persistent connections
             Boolean tcpKeepAlive = propertyHelper.getBoolean(KnownProperties.TARGET_YUGABYTE_TCP_KEEPALIVE);
-            poolProperties.setProperty("dataSource.tcpKeepAlive",
-                    (tcpKeepAlive != null && tcpKeepAlive) ? "true" : "true"); // Default to true
-            logger.info("  tcpKeepAlive: {}", poolProperties.getProperty("dataSource.tcpKeepAlive"));
+            if (tcpKeepAlive == null || tcpKeepAlive) {
+                urlParams.add("tcpKeepAlive=true");
+            }
+            logger.info("  tcpKeepAlive: {}", (tcpKeepAlive == null || tcpKeepAlive) ? "true" : "false");
 
             // 5. Socket timeout
             Number socketTimeout = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_SOCKET_TIMEOUT);
-            poolProperties.setProperty("dataSource.socketTimeout",
-                    (socketTimeout != null) ? socketTimeout.toString() : "60000");
-            logger.info("  socketTimeout: {}ms", poolProperties.getProperty("dataSource.socketTimeout"));
+            String socketTimeoutValue = (socketTimeout != null) ? socketTimeout.toString() : "60000";
+            urlParams.add("socketTimeout=" + socketTimeoutValue);
+            logger.info("  socketTimeout: {}ms", socketTimeoutValue);
 
             // ========================================================================
             // ADDITIONAL ENDPOINTS AND TOPOLOGY (for distributed clusters)
@@ -206,15 +224,8 @@ public class YugabyteSession {
             // Additional endpoints for load balancing
             String additionalEndpoints = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_ADDITIONAL_ENDPOINTS);
             if (additionalEndpoints != null && !additionalEndpoints.trim().isEmpty()) {
-                poolProperties.setProperty("dataSource.additionalEndpoints", additionalEndpoints);
+                urlParams.add("additionalEndpoints=" + additionalEndpoints);
                 logger.info("  Additional Endpoints: {}", additionalEndpoints);
-            }
-
-            // Topology keys for geo-location aware load balancing
-            String topologyKeys = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_TOPOLOGY_KEYS);
-            if (topologyKeys != null && !topologyKeys.trim().isEmpty()) {
-                poolProperties.setProperty("dataSource.topologyKeys", topologyKeys);
-                logger.info("  Topology Keys: {}", topologyKeys);
             }
 
             // ========================================================================
@@ -226,21 +237,34 @@ public class YugabyteSession {
             String sslRootCert = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SSLROOTCERT);
 
             if (sslEnabled != null && "true".equalsIgnoreCase(sslEnabled)) {
-                poolProperties.setProperty("dataSource.ssl", "true");
+                urlParams.add("ssl=true");
                 if (sslMode != null && !sslMode.isEmpty()) {
-                    poolProperties.setProperty("dataSource.sslmode", sslMode);
+                    urlParams.add("sslmode=" + sslMode);
                 } else {
-                    poolProperties.setProperty("dataSource.sslmode", "require");
+                    urlParams.add("sslmode=require");
                 }
                 if (sslRootCert != null && !sslRootCert.isEmpty()) {
-                    poolProperties.setProperty("dataSource.sslrootcert", sslRootCert);
+                    urlParams.add("sslrootcert=" + sslRootCert);
                 }
-                logger.info("  SSL enabled with sslmode: {}", poolProperties.getProperty("dataSource.sslmode"));
+                logger.info("  SSL enabled with sslmode: {}",
+                        (sslMode != null && !sslMode.isEmpty()) ? sslMode : "require");
             } else {
-                poolProperties.setProperty("dataSource.ssl", "false");
-                poolProperties.setProperty("dataSource.sslmode", "disable");
+                urlParams.add("ssl=false");
+                urlParams.add("sslmode=disable");
                 logger.info("  SSL disabled");
             }
+
+            // Build final JDBC URL with all parameters
+            if (!urlParams.isEmpty()) {
+                jdbcUrl.append("?").append(String.join("&", urlParams));
+            }
+
+            String finalJdbcUrl = jdbcUrl.toString();
+            logger.info("JDBC URL: jdbc:yugabytedb://{}:{}/{} (parameters hidden)", host, port, database);
+
+            // Set JDBC URL in HikariCP properties
+            // Note: We'll load the driver class explicitly before creating HikariConfig
+            poolProperties.setProperty("jdbcUrl", finalJdbcUrl);
 
             // ========================================================================
             // HIKARICP POOL CONFIGURATION
@@ -273,15 +297,124 @@ public class YugabyteSession {
             logger.info("Batch Configuration:");
             logger.info("  Batch Size: {} records per batch", (batchSize != null) ? batchSize : 25);
 
+            // Explicitly load and register the YugabyteDB driver class
+            // Based on: https://www.yugabyte.com/blog/automatic-failover-jdbc-smart-driver-hikari/
+            // The driver must be loaded and registered before HikariCP can use it
+            Driver yugabyteDriver = null;
+            try {
+                ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+                if (classLoader == null) {
+                    classLoader = YugabyteSession.class.getClassLoader();
+                }
+                Class<?> driverClass = Class.forName("com.yugabyte.Driver", true, classLoader);
+                yugabyteDriver = (Driver) driverClass.getDeclaredConstructor().newInstance();
+                DriverManager.registerDriver(yugabyteDriver);
+
+                // Test that the driver accepts the JDBC URL (required for HikariCP's DriverDataSource)
+                if (!yugabyteDriver.acceptsURL(finalJdbcUrl)) {
+                    logger.warn("Driver does not accept URL, but continuing - this may cause issues");
+                }
+
+                // Test a connection to ensure driver works (then close it immediately)
+                try (Connection testConn = yugabyteDriver.connect(finalJdbcUrl, new Properties())) {
+                    if (testConn != null) {
+                        logger.info("Successfully tested YugabyteDB driver connection");
+                        testConn.close();
+                    }
+                } catch (SQLException e) {
+                    logger.warn("Test connection failed, but driver is registered: {}", e.getMessage());
+                }
+
+                logger.info("Successfully loaded and registered YugabyteDB driver: com.yugabyte.Driver");
+            } catch (Exception e) {
+                logger.error("Failed to load/register YugabyteDB driver class: com.yugabyte.Driver", e);
+                throw new RuntimeException(
+                        "YugabyteDB driver not found or could not be registered. Ensure jdbc-yugabytedb dependency is included.",
+                        e);
+            }
+
             // Create HikariConfig and validate
-            HikariConfig config = new HikariConfig(poolProperties);
+            // Reference: https://www.yugabyte.com/blog/automatic-failover-jdbc-smart-driver-hikari/
+            // Since DriverManager.getDriver() has classloader issues in Spark, we'll use a custom DataSource
+            // that wraps our already-loaded driver instance
+            HikariConfig config = new HikariConfig();
+            // Set JDBC URL
+            config.setJdbcUrl(finalJdbcUrl);
+            // Copy pool properties
+            config.setMaximumPoolSize(Integer.parseInt(poolProperties.getProperty("maximumPoolSize", "20")));
+            config.setMinimumIdle(Integer.parseInt(poolProperties.getProperty("minimumIdle", "5")));
+            config.setConnectionTimeout(Long.parseLong(poolProperties.getProperty("connectionTimeout", "60000")));
+            config.setIdleTimeout(Long.parseLong(poolProperties.getProperty("idleTimeout", "300000")));
+            config.setMaxLifetime(Long.parseLong(poolProperties.getProperty("maxLifetime", "1800000")));
+            config.setLeakDetectionThreshold(
+                    Long.parseLong(poolProperties.getProperty("leakDetectionThreshold", "120000")));
+            config.setPoolName(poolProperties.getProperty("poolName", "CDM-YugabyteDB-HighPerf-Pool"));
+
+            // Use a simple DataSource wrapper that uses our pre-loaded driver
+            // This avoids DriverManager.getDriver() classloader issues in Spark
+            final Properties driverProps = new Properties();
+            driverProps.setProperty("user", username);
+            driverProps.setProperty("password", password);
+            final Driver finalDriver = yugabyteDriver;
+            final String finalUrl = finalJdbcUrl;
+
+            // Create a simple DataSource implementation using our driver
+            DataSource customDataSource = new DataSource() {
+                @Override
+                public Connection getConnection() throws SQLException {
+                    return finalDriver.connect(finalUrl, driverProps);
+                }
+
+                @Override
+                public Connection getConnection(String user, String password) throws SQLException {
+                    Properties props = new Properties(driverProps);
+                    props.setProperty("user", user);
+                    props.setProperty("password", password);
+                    return finalDriver.connect(finalUrl, props);
+                }
+
+                @Override
+                public java.io.PrintWriter getLogWriter() throws SQLException {
+                    return null;
+                }
+
+                @Override
+                public void setLogWriter(java.io.PrintWriter out) throws SQLException {
+                }
+
+                @Override
+                public void setLoginTimeout(int seconds) throws SQLException {
+                }
+
+                @Override
+                public int getLoginTimeout() throws SQLException {
+                    return 0;
+                }
+
+                @Override
+                public java.util.logging.Logger getParentLogger() {
+                    return null;
+                }
+
+                @Override
+                public <T> T unwrap(Class<T> iface) throws SQLException {
+                    return null;
+                }
+
+                @Override
+                public boolean isWrapperFor(Class<?> iface) throws SQLException {
+                    return false;
+                }
+            };
+
+            config.setDataSource(customDataSource);
             config.validate();
 
             // Create HikariDataSource
             HikariDataSource ds = new HikariDataSource(config);
 
             logger.info("=========================================================================");
-            logger.info("Successfully created HikariDataSource with YBClusterAwareDataSource");
+            logger.info("Successfully created HikariDataSource with YugabyteDB JDBC Driver");
             logger.info("Connection pool ready for high-performance batch operations");
             logger.info("=========================================================================");
 
