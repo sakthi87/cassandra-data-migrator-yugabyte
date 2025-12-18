@@ -116,9 +116,10 @@ public class YugabyteUpsertStatement {
 
     private String buildUpsertStatement() {
         StringBuilder sql = new StringBuilder();
-        // In YugabyteDB, use schema.table format (public.table_name)
+        // In YugabyteDB, use schema.table format (e.g., public.table_name or my_schema.table_name)
         // The database is already set in the connection URL
-        String tableName = "public." + yugabyteTable.getTableName();
+        String schema = yugabyteTable.getSchemaName();
+        String tableName = schema + "." + yugabyteTable.getTableName();
         sql.append("INSERT INTO ").append(tableName).append(" (");
 
         // Add column names

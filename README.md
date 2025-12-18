@@ -159,6 +159,11 @@ spark.cdm.connect.target.yugabyte.database=your_database
 spark.cdm.connect.target.yugabyte.username=yugabyte
 spark.cdm.connect.target.yugabyte.password=yugabyte
 
+# Schema Configuration (Optional)
+# Default: "public" (PostgreSQL default schema)
+# Use this if your tables are in a custom schema
+spark.cdm.connect.target.yugabyte.schema=public
+
 # Performance Settings
 spark.cdm.connect.target.yugabyte.batchSize=25
 spark.cdm.connect.target.yugabyte.rewriteBatchedInserts=true
@@ -176,6 +181,45 @@ spark.cdm.connect.target.yugabyte.loadBalance=false
 ```
 
 See `transaction-test.properties` for a complete example configuration.
+
+#### Custom Schema Support
+
+By default, CDM assumes tables are in the `public` schema (PostgreSQL default). If your tables are in a custom schema, you can configure it in two ways:
+
+**Option 1: Using Configuration Property (Recommended)**
+```properties
+# Specify the schema name
+spark.cdm.connect.target.yugabyte.schema=my_custom_schema
+```
+
+**Option 2: Using keyspaceTable Format**
+You can also specify the schema in the `keyspaceTable` property:
+- `schema.table` - Table in custom schema
+- `database.schema.table` - Full path (database is already in connection URL)
+
+**Auto-Detection:**
+If the table is not found in the specified/default schema, CDM will automatically search for the table across all schemas in the database.
+
+**Example:**
+```properties
+# Table is in "finance" schema instead of "public"
+spark.cdm.connect.target.yugabyte.schema=finance
+spark.cdm.schema.target.keyspaceTable=transaction_datastore.my_table
+```
+
+**Auto-Detection Behavior:**
+- If the table is not found in the specified/default schema, CDM automatically searches for it across all schemas
+- This is especially useful when the `keyspaceTable` format (`database.table`) might be misinterpreted
+- The detected schema is logged for visibility
+- Tested and verified with 100k+ records
+
+**Example Log Output:**
+```
+INFO YugabyteTable: Discovering schema for table: transaction_datastore.my_table
+WARN YugabyteTable: Table not found in schema transaction_datastore. Attempting to auto-detect schema...
+INFO YugabyteTable: Found table in schema public
+INFO YugabyteTable: Auto-detected schema: public. Retrying table discovery...
+```
 
 ### Performance Results
 

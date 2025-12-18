@@ -27,10 +27,8 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.datastax.cdm.data.CqlConversion;
 import com.datastax.cdm.properties.IPropertyHelper;
 import com.datastax.cdm.properties.KnownProperties;
-import com.datastax.cdm.properties.PropertyHelper;
 import com.datastax.cdm.yugabyte.mapping.DataTypeMapper;
 import com.datastax.oss.driver.api.core.type.DataType;
 
@@ -38,14 +36,17 @@ public class YugabyteTable extends BaseTable {
     private static final Logger logger = LoggerFactory.getLogger(YugabyteTable.class);
 
     private final Connection connection;
+    private final IPropertyHelper propertyHelper;
     private final Map<String, String> columnNameToPostgresTypeMap = new HashMap<>();
     private final List<String> primaryKeyNames = new ArrayList<>();
     private final List<String> allColumnNames = new ArrayList<>();
     private final List<Class<?>> bindClasses = new ArrayList<>();
     private final DataTypeMapper dataTypeMapper;
+    private String schemaName = "public"; // Default schema name
 
     public YugabyteTable(IPropertyHelper propertyHelper, boolean isOrigin, Connection connection) {
         super(propertyHelper, isOrigin);
+        this.propertyHelper = propertyHelper;
         this.connection = connection;
         this.dataTypeMapper = new DataTypeMapper();
 
@@ -57,18 +58,46 @@ public class YugabyteTable extends BaseTable {
         try {
             DatabaseMetaData metaData = connection.getMetaData();
             String[] tableParts = getKeyspaceTable().split("\\.");
-            // In YugabyteDB, the database name is in the connection URL, not the schema
-            // The schema is always "public" by default (PostgreSQL convention)
-            // So we extract just the table name from keyspaceTable (which may be "db.table" or just "table")
-            String schema = "public"; // YugabyteDB uses PostgreSQL schema convention
-            String tableName = tableParts.length > 1 ? tableParts[tableParts.length - 1] : tableParts[0];
+
+            // Determine schema and table name
+            // Format options:
+            // 1. "table" -> use configured/default schema
+            // 2. "schema.table" -> use specified schema
+            // 3. "database.schema.table" -> use specified schema (database is in connection URL)
+            String schema;
+            String tableName;
+
+            if (tableParts.length == 1) {
+                // Just table name: "table" -> use configured schema or default to "public"
+                schema = determineSchemaName();
+                tableName = tableParts[0];
+            } else if (tableParts.length == 2) {
+                // Schema.table format: "schema.table"
+                schema = tableParts[0];
+                tableName = tableParts[1];
+            } else if (tableParts.length == 3) {
+                // Database.schema.table format: "database.schema.table"
+                // Note: database is already in connection URL, so we use schema.table
+                schema = tableParts[1];
+                tableName = tableParts[2];
+            } else {
+                // Fallback: use configured schema and last part as table name
+                schema = determineSchemaName();
+                tableName = tableParts[tableParts.length - 1];
+                logger.warn("Unexpected keyspaceTable format: {}. Using schema: {}, table: {}", getKeyspaceTable(),
+                        schema, tableName);
+            }
+
+            this.schemaName = schema;
 
             logger.info("Discovering schema for table: {}.{} (database: {})", schema, tableName,
-                    tableParts.length > 1 ? tableParts[0] : "current");
+                    connection.getCatalog());
 
-            // Get column information
+            // Try to get column information with the determined schema
+            boolean tableFound = false;
             try (ResultSet columns = metaData.getColumns(null, schema, tableName, null)) {
                 while (columns.next()) {
+                    tableFound = true;
                     String columnName = columns.getString("COLUMN_NAME");
                     String dataType = columns.getString("TYPE_NAME");
                     int dataTypeCode = columns.getInt("DATA_TYPE");
@@ -82,6 +111,37 @@ public class YugabyteTable extends BaseTable {
 
                     logger.debug("Column: {} -> Type: {} -> Java Class: {}", columnName, dataType,
                             bindClass.getSimpleName());
+                }
+            }
+
+            // If table not found in specified schema, try to auto-detect schema
+            if (!tableFound) {
+                logger.warn("Table {} not found in schema {}. Attempting to auto-detect schema...", tableName, schema);
+                schema = autoDetectSchema(metaData, tableName);
+                if (schema != null) {
+                    this.schemaName = schema;
+                    logger.info("Auto-detected schema: {}. Retrying table discovery...", schema);
+
+                    // Retry with detected schema
+                    try (ResultSet columns = metaData.getColumns(null, schema, tableName, null)) {
+                        while (columns.next()) {
+                            String columnName = columns.getString("COLUMN_NAME");
+                            String dataType = columns.getString("TYPE_NAME");
+                            int dataTypeCode = columns.getInt("DATA_TYPE");
+
+                            allColumnNames.add(columnName);
+                            columnNameToPostgresTypeMap.put(columnName, dataType);
+
+                            Class<?> bindClass = dataTypeMapper.getJavaClass(dataTypeCode, dataType);
+                            bindClasses.add(bindClass);
+
+                            logger.debug("Column: {} -> Type: {} -> Java Class: {}", columnName, dataType,
+                                    bindClass.getSimpleName());
+                        }
+                    }
+                } else {
+                    throw new RuntimeException("Table " + tableName + " not found in schema " + schema
+                            + " and could not auto-detect schema. Please specify the correct schema name.");
                 }
             }
 
@@ -138,6 +198,73 @@ public class YugabyteTable extends BaseTable {
 
     public DataTypeMapper getDataTypeMapper() {
         return dataTypeMapper;
+    }
+
+    /**
+     * Get the schema name where the table is located.
+     *
+     * @return Schema name (e.g., "public", "my_schema")
+     */
+    public String getSchemaName() {
+        return schemaName;
+    }
+
+    /**
+     * Determine schema name from configuration or default to "public".
+     */
+    private String determineSchemaName() {
+        String configuredSchema = propertyHelper.getString(KnownProperties.TARGET_YUGABYTE_SCHEMA);
+        if (configuredSchema != null && !configuredSchema.trim().isEmpty()) {
+            return configuredSchema.trim();
+        }
+        return "public"; // Default PostgreSQL schema
+    }
+
+    /**
+     * Auto-detect schema by searching for the table across all schemas.
+     *
+     * @param metaData
+     *            Database metadata
+     * @param tableName
+     *            Table name to search for
+     *
+     * @return Schema name if found, null otherwise
+     */
+    private String autoDetectSchema(DatabaseMetaData metaData, String tableName) {
+        try {
+            // Search in common schemas first
+            String[] commonSchemas = { "public", "information_schema", "pg_catalog" };
+            for (String schema : commonSchemas) {
+                try (ResultSet columns = metaData.getColumns(null, schema, tableName, null)) {
+                    if (columns.next()) {
+                        logger.info("Found table {} in schema {}", tableName, schema);
+                        return schema;
+                    }
+                }
+            }
+
+            // If not found in common schemas, search all schemas
+            try (ResultSet schemas = metaData.getSchemas()) {
+                while (schemas.next()) {
+                    String schema = schemas.getString("TABLE_SCHEM");
+                    // Skip system schemas
+                    if (schema.equals("information_schema") || schema.equals("pg_catalog")
+                            || schema.startsWith("pg_")) {
+                        continue;
+                    }
+
+                    try (ResultSet columns = metaData.getColumns(null, schema, tableName, null)) {
+                        if (columns.next()) {
+                            logger.info("Found table {} in schema {}", tableName, schema);
+                            return schema;
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            logger.warn("Error during schema auto-detection", e);
+        }
+        return null;
     }
 
     @Override

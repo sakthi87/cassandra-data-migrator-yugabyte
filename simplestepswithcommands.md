@@ -36,6 +36,10 @@ spark.cdm.connect.target.yugabyte.database=transaction_datastore
 spark.cdm.connect.target.yugabyte.username=yugabyte
 spark.cdm.connect.target.yugabyte.password=yugabyte
 
+# Schema Configuration (Optional - defaults to "public")
+# Only needed if your tables are in a custom schema
+# spark.cdm.connect.target.yugabyte.schema=my_custom_schema
+
 # Table Configuration
 spark.cdm.schema.origin.keyspaceTable=transaction_datastore.dda_pstd_fincl_txn_cnsmr_by_accntnbr
 spark.cdm.schema.target.keyspaceTable=transaction_datastore.dda_pstd_fincl_txn_cnsmr_by_accntnbr
@@ -116,7 +120,69 @@ ps aux | grep spark-submit
 ./run_migration.sh background migration.log
 ```
 
-## Step 3.5: Audit Fields Population (Optional)
+## Step 3.5: Custom Schema Support (Optional)
+
+> **✅ Feature Status**: Schema auto-detection is fully implemented and tested. CDM automatically detects the correct schema if the table is not found in the default "public" schema.
+
+By default, CDM assumes YugabyteDB tables are in the `public` schema (PostgreSQL default). If your tables are in a custom schema, you have two options:
+
+### Option 1: Using Configuration Property (Recommended)
+
+Add the schema property to your properties file:
+
+```properties
+# Specify the schema name
+spark.cdm.connect.target.yugabyte.schema=my_custom_schema
+```
+
+### Option 2: Using keyspaceTable Format
+
+You can specify the schema directly in the `keyspaceTable` property:
+
+```properties
+# Format: schema.table
+spark.cdm.schema.target.keyspaceTable=my_custom_schema.my_table
+
+# Or: database.schema.table (database is already in connection URL)
+spark.cdm.schema.target.keyspaceTable=transaction_datastore.my_custom_schema.my_table
+```
+
+### Auto-Detection Feature
+
+CDM includes automatic schema detection:
+- If the table is not found in the specified/default schema, CDM will automatically search for it across all schemas
+- This is especially useful when migrating from Cassandra where the keyspace name might be confused with the schema name
+- The detected schema is logged for visibility
+
+**Example Log Output:**
+```
+INFO YugabyteTable: Discovering schema for table: transaction_datastore.my_table (database: transaction_datastore)
+WARN YugabyteTable: Table my_table not found in schema transaction_datastore. Attempting to auto-detect schema...
+INFO YugabyteTable: Found table my_table in schema public
+INFO YugabyteTable: Auto-detected schema: public. Retrying table discovery...
+```
+
+### Common Scenarios
+
+| Scenario | Configuration |
+|----------|--------------|
+| **Default public schema** | No configuration needed (default) |
+| **Custom schema** | `spark.cdm.connect.target.yugabyte.schema=finance` |
+| **Schema in keyspaceTable** | `spark.cdm.schema.target.keyspaceTable=finance.my_table` |
+| **Auto-detection** | Let CDM find the schema automatically |
+
+### Troubleshooting Schema Issues
+
+**Issue: "Table not found in schema X"**
+- CDM will automatically try to detect the correct schema
+- Check the logs for auto-detection messages
+- Manually specify the schema if auto-detection fails
+
+**Issue: "Multiple tables with same name in different schemas"**
+- Explicitly specify the schema using `spark.cdm.connect.target.yugabyte.schema`
+- Or use the full path in keyspaceTable: `schema.table`
+
+## Step 3.6: Audit Fields Population (Optional)
 
 > **✅ Feature Status**: This feature is fully implemented and tested. It successfully populates audit fields for all migrated records.
 

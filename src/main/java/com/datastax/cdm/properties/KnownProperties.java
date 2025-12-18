@@ -57,6 +57,9 @@ public class KnownProperties {
     public static final String TARGET_USERNAME = "spark.cdm.connect.target.yugabyte.username";
     public static final String TARGET_PASSWORD = "spark.cdm.connect.target.yugabyte.password";
     public static final String TARGET_TYPE = "spark.cdm.connect.target.type"; // "cassandra" or "yugabyte"
+    public static final String TARGET_YUGABYTE_SCHEMA = "spark.cdm.connect.target.yugabyte.schema"; // Schema name
+                                                                                                    // (default:
+                                                                                                    // "public")
 
     // YugabyteDB YSQL SSL configuration (for Smart Driver)
     public static final String TARGET_YUGABYTE_SSL_ENABLED = "spark.cdm.connect.target.yugabyte.ssl.enabled";
@@ -125,6 +128,8 @@ public class KnownProperties {
         defaults.put(TARGET_USERNAME, "yugabyte");
         types.put(TARGET_PASSWORD, PropertyType.STRING);
         defaults.put(TARGET_PASSWORD, "yugabyte");
+        types.put(TARGET_YUGABYTE_SCHEMA, PropertyType.STRING);
+        defaults.put(TARGET_YUGABYTE_SCHEMA, "public"); // Default PostgreSQL schema
         types.put(TARGET_TYPE, PropertyType.STRING);
         defaults.put(TARGET_TYPE, "cassandra");
 
