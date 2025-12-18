@@ -9,7 +9,7 @@ Migrate and Validate Tables between Origin and Target Cassandra Clusters.
 
 > **Note:** This codebase is based on the DataStax Cassandra Data Migrator for migration from Cassandra to Cassandra support. This fork adds enhanced features for **YugabyteDB as target** to enable high-performance data migration from Cassandra to YugabyteDB.
 
-## YugabyteDB Migration Support
+### YugabyteDB Migration Support
 
 This fork includes enhanced support for migrating data to **YugabyteDB** with performance optimizations:
 - **YSQL (PostgreSQL)** migration using YugabyteDB Smart Driver with HikariCP connection pooling
