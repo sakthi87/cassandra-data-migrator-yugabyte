@@ -18,12 +18,20 @@ package com.datastax.cdm.yugabyte.statement;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.datastax.cdm.data.Record;
+import com.datastax.cdm.feature.ConstantColumns;
+import com.datastax.cdm.feature.FeatureFactory;
+import com.datastax.cdm.feature.Featureset;
 import com.datastax.cdm.properties.IPropertyHelper;
 import com.datastax.cdm.properties.KnownProperties;
 import com.datastax.cdm.schema.YugabyteTable;
@@ -55,6 +63,11 @@ public class YugabyteUpsertStatement {
     private final List<String> columnNames;
     private final List<Class<?>> bindClasses;
 
+    // Constant Columns feature support
+    private final ConstantColumns constantColumnFeature;
+    private final Map<String, Object> constantColumnParsedValues = new HashMap<>();
+    private final Map<String, Integer> constantColumnIndexMap = new HashMap<>();
+
     // Phase 1: Reusable PreparedStatement (created once, reused for all records)
     private PreparedStatement reusableStatement;
     private Connection batchConnection;
@@ -73,6 +86,13 @@ public class YugabyteUpsertStatement {
         this.columnNames = yugabyteTable.getAllColumnNames();
         this.bindClasses = yugabyteTable.getBindClasses();
 
+        // Load and initialize Constant Columns feature
+        this.constantColumnFeature = (ConstantColumns) FeatureFactory.getFeature(Featureset.CONSTANT_COLUMNS);
+        if (constantColumnFeature != null) {
+            constantColumnFeature.loadProperties(propertyHelper);
+            initializeConstantColumns();
+        }
+
         // Get batch size from configuration
         Number configuredBatchSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_BATCH_SIZE);
         this.batchSize = (configuredBatchSize != null) ? configuredBatchSize.intValue() : 25;
@@ -87,6 +107,9 @@ public class YugabyteUpsertStatement {
         logger.info("  PreparedStatement Reuse: ENABLED (Phase 1)");
         logger.info("  JDBC Batching: ENABLED (Phase 2)");
         logger.info("  Batch Size: {} records per batch", batchSize);
+        if (constantColumnFeature != null && constantColumnFeature.isEnabled()) {
+            logger.info("  Constant Columns: ENABLED ({} columns)", constantColumnFeature.getNames().size());
+        }
         logger.info("  SQL: {}", upsertSQL);
         logger.info("=========================================================================");
     }
@@ -193,14 +216,47 @@ public class YugabyteUpsertStatement {
             String columnName = columnNames.get(i);
             Class<?> bindClass = bindClasses.get(i);
 
-            // Get value from origin row
-            Object value = getValueFromOriginRow(originRow, columnName);
+            Object value;
+            boolean isConstantColumn = false;
 
-            // Convert value to appropriate type
-            Object convertedValue = dataTypeMapper.convertValue(value, null, bindClass);
+            // Check if this is a constant column
+            if (constantColumnFeature != null && constantColumnFeature.isEnabled()
+                    && constantColumnFeature.getNames().contains(columnName)) {
+                // Use constant value instead of origin row value
+                value = constantColumnParsedValues.get(columnName);
+                isConstantColumn = true;
+                if (value == null) {
+                    logger.warn("Constant column {} has no parsed value, using null", columnName);
+                }
+            } else {
+                // Get value from origin row
+                value = getValueFromOriginRow(originRow, columnName);
+            }
+
+            // Convert value to appropriate type (skip conversion for constant columns as they're already parsed)
+            Object convertedValue;
+            if (isConstantColumn && value != null) {
+                // Constant values are already parsed to the correct type, use directly
+                convertedValue = value;
+            } else {
+                // Convert value from origin row to appropriate type
+                convertedValue = dataTypeMapper.convertValue(value, null, bindClass);
+            }
 
             // Set parameter (JDBC uses 1-based indexing)
-            reusableStatement.setObject(i + 1, convertedValue);
+            // Use type-specific setters for better type handling
+            if (convertedValue == null) {
+                reusableStatement.setObject(i + 1, null);
+            } else if (convertedValue instanceof Timestamp) {
+                reusableStatement.setTimestamp(i + 1, (Timestamp) convertedValue);
+            } else if (convertedValue instanceof LocalDateTime) {
+                // Convert LocalDateTime to Timestamp for JDBC
+                reusableStatement.setTimestamp(i + 1, Timestamp.valueOf((LocalDateTime) convertedValue));
+            } else if (convertedValue instanceof java.sql.Date) {
+                reusableStatement.setDate(i + 1, (java.sql.Date) convertedValue);
+            } else {
+                reusableStatement.setObject(i + 1, convertedValue);
+            }
         }
 
         // Add to batch (not executed yet)
@@ -322,6 +378,122 @@ public class YugabyteUpsertStatement {
             } catch (Exception e2) {
                 logger.warn("Could not get value for column {} from origin row", columnName);
             }
+            return null;
+        }
+    }
+
+    /**
+     * Initialize constant columns by parsing their string values into appropriate Java types.
+     */
+    private void initializeConstantColumns() {
+        if (constantColumnFeature == null || !constantColumnFeature.isEnabled()) {
+            return;
+        }
+
+        List<String> constantNames = constantColumnFeature.getNames();
+        List<String> constantValues = constantColumnFeature.getValues();
+
+        if (constantNames == null || constantValues == null || constantNames.size() != constantValues.size()) {
+            logger.warn("Constant columns configuration is invalid, skipping initialization");
+            return;
+        }
+
+        for (int i = 0; i < constantNames.size(); i++) {
+            String columnName = constantNames.get(i);
+            String stringValue = constantValues.get(i);
+            int columnIndex = columnNames.indexOf(columnName);
+
+            if (columnIndex < 0) {
+                logger.warn("Constant column {} not found in table columns, skipping", columnName);
+                continue;
+            }
+
+            Class<?> bindClass = bindClasses.get(columnIndex);
+            Object parsedValue = parseConstantValue(stringValue, bindClass);
+
+            if (parsedValue != null) {
+                constantColumnParsedValues.put(columnName, parsedValue);
+                constantColumnIndexMap.put(columnName, columnIndex);
+                logger.info("Initialized constant column {} with value {} (type: {}, original: '{}')", columnName,
+                        parsedValue, bindClass.getSimpleName(), stringValue);
+            } else {
+                logger.error("Failed to parse constant value '{}' for column {} (type: {})", stringValue, columnName,
+                        bindClass.getSimpleName());
+            }
+        }
+
+        if (!constantColumnParsedValues.isEmpty()) {
+            logger.info("Initialized {} constant columns: {}", constantColumnParsedValues.size(),
+                    constantColumnParsedValues.keySet());
+        }
+    }
+
+    /**
+     * Parse a constant value string into the appropriate Java type.
+     */
+    private Object parseConstantValue(String stringValue, Class<?> targetClass) {
+        if (stringValue == null || stringValue.isEmpty()) {
+            return null;
+        }
+
+        // Remove surrounding quotes if present (for string values)
+        String trimmedValue = stringValue.trim();
+        if (trimmedValue.startsWith("'") && trimmedValue.endsWith("'")) {
+            trimmedValue = trimmedValue.substring(1, trimmedValue.length() - 1);
+        }
+
+        try {
+            if (targetClass == String.class) {
+                return trimmedValue;
+            } else if (targetClass == Integer.class || targetClass == int.class) {
+                return Integer.parseInt(trimmedValue);
+            } else if (targetClass == Long.class || targetClass == long.class) {
+                return Long.parseLong(trimmedValue);
+            } else if (targetClass == Double.class || targetClass == double.class) {
+                return Double.parseDouble(trimmedValue);
+            } else if (targetClass == Float.class || targetClass == float.class) {
+                return Float.parseFloat(trimmedValue);
+            } else if (targetClass == Boolean.class || targetClass == boolean.class) {
+                return Boolean.parseBoolean(trimmedValue);
+            } else if (targetClass == Timestamp.class || targetClass == java.util.Date.class
+                    || targetClass == LocalDateTime.class) {
+                // Try ISO 8601 format first
+                try {
+                    // Handle ISO 8601 format: 2024-12-17T10:00:00Z or 2024-12-17T10:00:00.000Z
+                    String isoValue = trimmedValue;
+                    if (isoValue.endsWith("Z")) {
+                        isoValue = isoValue.substring(0, isoValue.length() - 1);
+                    }
+                    // Try with milliseconds first
+                    try {
+                        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS");
+                        LocalDateTime dateTime = LocalDateTime.parse(isoValue, formatter);
+                        // Always return Timestamp for JDBC compatibility
+                        return Timestamp.valueOf(dateTime);
+                    } catch (Exception e1) {
+                        // Try without milliseconds
+                        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+                        LocalDateTime dateTime = LocalDateTime.parse(isoValue, formatter);
+                        // Always return Timestamp for JDBC compatibility
+                        return Timestamp.valueOf(dateTime);
+                    }
+                } catch (Exception e) {
+                    // Try standard timestamp format (yyyy-MM-dd HH:mm:ss)
+                    try {
+                        return Timestamp.valueOf(trimmedValue);
+                    } catch (Exception e2) {
+                        logger.error("Failed to parse timestamp value '{}'", stringValue, e2);
+                        return null;
+                    }
+                }
+            } else if (targetClass == java.sql.Date.class) {
+                return java.sql.Date.valueOf(trimmedValue);
+            } else {
+                logger.warn("Unsupported constant column type: {}, using string value", targetClass.getName());
+                return trimmedValue;
+            }
+        } catch (Exception e) {
+            logger.error("Failed to parse constant value '{}' as type {}", stringValue, targetClass.getName(), e);
             return null;
         }
     }

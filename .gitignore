@@ -51,4 +51,4 @@ logs/
 
 # Test results
 test-output/
-test-results/
+test-results/migration_logs/
