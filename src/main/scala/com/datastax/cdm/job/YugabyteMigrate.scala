@@ -78,20 +78,39 @@ object YugabyteMigrate extends BasePartitionJob {
     // Spark Configuration
     sb.append("Spark Configuration:\n");
     sb.append(s"  Master: ${sContext.getConf.get("spark.master", "local[*]")}\n");
-    sb.append(s"  Driver Memory: ${sContext.getConf.get("spark.driver.memory", "1g")}\n");
-    sb.append(s"  Executor Memory: ${sContext.getConf.get("spark.executor.memory", "1g")}\n");
-    sb.append(s"  Executor Cores: ${sContext.getConf.get("spark.executor.cores", "1")}\n");
+    // In local mode, executor memory/cores might not be set in SparkConf
+    // Check both SparkConf and system properties
+    val driverMemory = sContext.getConf.getOption("spark.driver.memory").getOrElse(
+      System.getProperty("spark.driver.memory", "1g")
+    );
+    val executorMemory = sContext.getConf.getOption("spark.executor.memory").getOrElse(
+      System.getProperty("spark.executor.memory", 
+        if (sContext.getConf.get("spark.master", "").startsWith("local")) driverMemory else "1g")
+    );
+    val executorCores = sContext.getConf.getOption("spark.executor.cores").getOrElse(
+      System.getProperty("spark.executor.cores", "1")
+    );
+    sb.append(s"  Driver Memory: $driverMemory\n");
+    sb.append(s"  Executor Memory: $executorMemory\n");
+    sb.append(s"  Executor Cores: $executorCores\n");
     sb.append(s"  Executor Instances: ${sContext.getConf.get("spark.executor.instances", "1")}\n");
     sb.append(s"  Parallelism: ${sContext.getConf.get("spark.default.parallelism", "1")}\n");
     
     // CDM Configuration
     sb.append("\nCDM Configuration:\n");
-    sb.append(s"  Origin Rate Limit: ${getPropertyOrDefault("spark.cdm.rate.origin.readsPerSecond", "1000")} reads/sec\n");
-    sb.append(s"  Target Rate Limit: ${getPropertyOrDefault("spark.cdm.rate.target.writesPerSecond", "1000")} writes/sec\n");
-    sb.append(s"  Batch Size: ${getPropertyOrDefault("spark.cdm.batch.size", "100")}\n");
-    sb.append(s"  Fetch Size: ${getPropertyOrDefault("spark.cdm.fetch.size", "1000")}\n");
-    sb.append(s"  Partition Size: ${getPropertyOrDefault("spark.cdm.partition.size", "1000000")}\n");
-    sb.append(s"  Thread Count: ${getPropertyOrDefault("spark.cdm.thread.count", "4")}\n");
+    // Use correct property names from KnownProperties
+    val originRateLimit = propertyHelper.getInteger(KnownProperties.PERF_RATELIMIT_ORIGIN);
+    val targetRateLimit = propertyHelper.getInteger(KnownProperties.PERF_RATELIMIT_TARGET);
+    val batchSize = propertyHelper.getNumber(KnownProperties.PERF_BATCH_SIZE);
+    val fetchSize = propertyHelper.getNumber(KnownProperties.PERF_FETCH_SIZE);
+    val numParts = propertyHelper.getNumber(KnownProperties.PERF_NUM_PARTS);
+    val yugabyteBatchSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_BATCH_SIZE);
+    
+    sb.append(s"  Origin Rate Limit: ${if (originRateLimit != null) originRateLimit else "20000"} reads/sec\n");
+    sb.append(s"  Target Rate Limit: ${if (targetRateLimit != null) targetRateLimit else "20000"} writes/sec\n");
+    sb.append(s"  Batch Size: ${if (yugabyteBatchSize != null) yugabyteBatchSize else (if (batchSize != null) batchSize else "25")}\n");
+    sb.append(s"  Fetch Size: ${if (fetchSize != null) fetchSize else "1000"}\n");
+    sb.append(s"  Number of Partitions: ${if (numParts != null) numParts else "40"}\n");
     
     // Connection Configuration
     sb.append("\nConnection Configuration:\n");
