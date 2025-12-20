@@ -189,6 +189,45 @@ public class YugabyteUpsertStatement {
     }
 
     /**
+     * Check if connection is valid, reconnect if needed
+     */
+    private void ensureConnectionValid() throws SQLException {
+        if (batchConnection == null || batchConnection.isClosed()) {
+            logger.warn("Connection is closed, reinitializing PreparedStatement");
+            initializeReusablePreparedStatement();
+        } else {
+            // Validate connection is still alive
+            try {
+                if (!batchConnection.isValid(5)) { // 5 second timeout for validation
+                    logger.warn("Connection validation failed, reinitializing PreparedStatement");
+                    // Close old connection
+                    try {
+                        if (reusableStatement != null) {
+                            reusableStatement.close();
+                        }
+                        batchConnection.close();
+                    } catch (SQLException e) {
+                        logger.debug("Error closing old connection", e);
+                    }
+                    initializeReusablePreparedStatement();
+                }
+            } catch (SQLException e) {
+                logger.warn("Connection validation check failed, reinitializing: {}", e.getMessage());
+                // Reinitialize on validation failure
+                try {
+                    if (reusableStatement != null) {
+                        reusableStatement.close();
+                    }
+                    batchConnection.close();
+                } catch (SQLException closeEx) {
+                    logger.debug("Error closing old connection", closeEx);
+                }
+                initializeReusablePreparedStatement();
+            }
+        }
+    }
+
+    /**
      * Phase 2: Add a record to the batch. Records are accumulated until batch size is reached, then executed together.
      *
      * @param record
@@ -200,6 +239,8 @@ public class YugabyteUpsertStatement {
      *             if there's a database error
      */
     public boolean addToBatch(Record record) throws SQLException {
+        // Ensure connection is valid before adding to batch
+        ensureConnectionValid();
         if (record == null) {
             throw new RuntimeException("Record is null");
         }
@@ -287,6 +328,9 @@ public class YugabyteUpsertStatement {
         }
 
         try {
+            // Ensure connection is valid before executing batch
+            ensureConnectionValid();
+
             // Execute all batched statements at once
             int[] results = reusableStatement.executeBatch();
 

@@ -99,15 +99,42 @@ object YugabyteMigrate extends BasePartitionJob {
     // CDM Configuration
     sb.append("\nCDM Configuration:\n");
     // Use correct property names from KnownProperties
-    val originRateLimit = propertyHelper.getInteger(KnownProperties.PERF_RATELIMIT_ORIGIN);
-    val targetRateLimit = propertyHelper.getInteger(KnownProperties.PERF_RATELIMIT_TARGET);
+    // Get rate limits - use getNumber() which returns default if property not explicitly set
+    // getInteger() returns null when property not set, but getNumber() should return default
+    val originRateLimitNum = propertyHelper.getNumber(KnownProperties.PERF_RATELIMIT_ORIGIN);
+    val targetRateLimitNum = propertyHelper.getNumber(KnownProperties.PERF_RATELIMIT_TARGET);
+    // Convert to int, using default 20000 if null (shouldn't happen if defaults loaded correctly)
+    // getNumber() should return the default value if property not explicitly set
+    // If null, use KnownProperties.getDefault() which always returns the default (20000)
+    val originRateLimit = if (originRateLimitNum != null) {
+      originRateLimitNum.intValue()
+    } else {
+      // Property not explicitly set, get default from KnownProperties
+      val defaultVal = KnownProperties.getDefault(KnownProperties.PERF_RATELIMIT_ORIGIN);
+      if (defaultVal != null) {
+        // Default is stored as Long, convert to int
+        defaultVal.asInstanceOf[java.lang.Long].intValue()
+      } else {
+        20000 // Hardcoded fallback (should never happen)
+      }
+    }
+    val targetRateLimit = if (targetRateLimitNum != null) {
+      targetRateLimitNum.intValue()
+    } else {
+      val defaultVal = KnownProperties.getDefault(KnownProperties.PERF_RATELIMIT_TARGET);
+      if (defaultVal != null) {
+        defaultVal.asInstanceOf[java.lang.Long].intValue()
+      } else {
+        20000 // Hardcoded fallback (should never happen)
+      }
+    }
     val batchSize = propertyHelper.getNumber(KnownProperties.PERF_BATCH_SIZE);
     val fetchSize = propertyHelper.getNumber(KnownProperties.PERF_FETCH_SIZE);
     val numParts = propertyHelper.getNumber(KnownProperties.PERF_NUM_PARTS);
     val yugabyteBatchSize = propertyHelper.getNumber(KnownProperties.TARGET_YUGABYTE_BATCH_SIZE);
     
-    sb.append(s"  Origin Rate Limit: ${if (originRateLimit != null) originRateLimit else "20000"} reads/sec\n");
-    sb.append(s"  Target Rate Limit: ${if (targetRateLimit != null) targetRateLimit else "20000"} writes/sec\n");
+    sb.append(s"  Origin Rate Limit: ${originRateLimit} reads/sec\n");
+    sb.append(s"  Target Rate Limit: ${targetRateLimit} writes/sec\n");
     sb.append(s"  Batch Size: ${if (yugabyteBatchSize != null) yugabyteBatchSize else (if (batchSize != null) batchSize else "25")}\n");
     sb.append(s"  Fetch Size: ${if (fetchSize != null) fetchSize else "1000"}\n");
     sb.append(s"  Number of Partitions: ${if (numParts != null) numParts else "40"}\n");

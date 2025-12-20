@@ -167,6 +167,23 @@ public class YugabyteSession {
             urlParams.add("password=" + password);
 
             // ========================================================================
+            // CONNECTION MANAGEMENT PROPERTIES
+            // ========================================================================
+
+            // Application Name - for monitoring and connection tracking
+            urlParams.add("ApplicationName=CDM-Migration");
+            logger.info("  ApplicationName: CDM-Migration (for monitoring)");
+
+            // Login Timeout - how long to wait for connection authentication
+            urlParams.add("loginTimeout=30");
+            logger.info("  loginTimeout: 30 seconds");
+
+            // Autocommit - CRITICAL for batch operations performance
+            // Setting to false allows batching multiple statements in a single transaction
+            urlParams.add("autocommit=false");
+            logger.info("  autocommit: false (CRITICAL for batch performance)");
+
+            // ========================================================================
             // CRITICAL PERFORMANCE PROPERTIES FOR YUGABYTEDB
             // ========================================================================
 
@@ -286,10 +303,15 @@ public class YugabyteSession {
             poolProperties.setProperty("minimumIdle", (minPoolSize != null) ? minPoolSize.toString() : "5");
 
             // Connection timeout settings - optimized for bulk loading
-            poolProperties.setProperty("connectionTimeout", "60000"); // 60 seconds
-            poolProperties.setProperty("idleTimeout", "300000"); // 5 minutes
-            poolProperties.setProperty("maxLifetime", "1800000"); // 30 minutes
-            poolProperties.setProperty("leakDetectionThreshold", "120000"); // 2 minutes (increased for batch ops)
+            // Increased timeouts for long-running partitions
+            poolProperties.setProperty("connectionTimeout", "120000"); // 120 seconds (2 minutes)
+            poolProperties.setProperty("idleTimeout", "600000"); // 10 minutes
+            poolProperties.setProperty("maxLifetime", "3600000"); // 60 minutes
+            poolProperties.setProperty("leakDetectionThreshold", "300000"); // 5 minutes (increased for batch ops)
+
+            // Connection validation - critical for detecting stale connections
+            poolProperties.setProperty("connectionTestQuery", "SELECT 1");
+            poolProperties.setProperty("validationTimeout", "5000"); // 5 seconds
 
             // Pool name for monitoring
             poolProperties.setProperty("poolName", "CDM-YugabyteDB-HighPerf-Pool");
@@ -351,9 +373,16 @@ public class YugabyteSession {
             // Copy pool properties
             config.setMaximumPoolSize(Integer.parseInt(poolProperties.getProperty("maximumPoolSize", "20")));
             config.setMinimumIdle(Integer.parseInt(poolProperties.getProperty("minimumIdle", "5")));
-            config.setConnectionTimeout(Long.parseLong(poolProperties.getProperty("connectionTimeout", "60000")));
-            config.setIdleTimeout(Long.parseLong(poolProperties.getProperty("idleTimeout", "300000")));
-            config.setMaxLifetime(Long.parseLong(poolProperties.getProperty("maxLifetime", "1800000")));
+            config.setConnectionTimeout(Long.parseLong(poolProperties.getProperty("connectionTimeout", "120000")));
+            config.setIdleTimeout(Long.parseLong(poolProperties.getProperty("idleTimeout", "600000")));
+            config.setMaxLifetime(Long.parseLong(poolProperties.getProperty("maxLifetime", "3600000")));
+
+            // Connection validation
+            String testQuery = poolProperties.getProperty("connectionTestQuery");
+            if (testQuery != null) {
+                config.setConnectionTestQuery(testQuery);
+            }
+            config.setValidationTimeout(Long.parseLong(poolProperties.getProperty("validationTimeout", "5000")));
             config.setLeakDetectionThreshold(
                     Long.parseLong(poolProperties.getProperty("leakDetectionThreshold", "120000")));
             config.setPoolName(poolProperties.getProperty("poolName", "CDM-YugabyteDB-HighPerf-Pool"));
